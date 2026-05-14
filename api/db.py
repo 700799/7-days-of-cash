@@ -1,7 +1,9 @@
-"""DuckDB connection helpers and schema initialization for the API.
+"""Postgres connection pool + schema initialization for the API.
 
-DuckDB connections are not threadsafe — a fresh connection is opened per request
-or per write. A module-level lock serializes writes (DuckDB is single-writer).
+Uses ``psycopg2.pool.SimpleConnectionPool`` so each request borrows a connection
+and returns it — works under Vercel's stateless lambdas because the pool lives
+inside the warm process; cold starts re-create it. Postgres' MVCC handles
+multi-writer concurrency, so the previous DuckDB-era write lock is gone.
 """
 from __future__ import annotations
 
@@ -10,12 +12,17 @@ import threading
 from contextlib import contextmanager
 from typing import Iterator, Optional
 
-import duckdb
+import psycopg2
+import psycopg2.extras
+import psycopg2.pool
 
-from .config import get_settings
 
-_WRITE_LOCK = threading.Lock()
-_SCHEMA_INIT_DONE: set[str] = set()
+# Per-process pool. Created lazily on first request; survives across requests in
+# a warm Vercel lambda. We keep the pool small (1..5) — Neon/Supabase free tiers
+# cap concurrent connections aggressively and pooled lambdas don't need many.
+_POOL: Optional[psycopg2.pool.SimpleConnectionPool] = None
+_POOL_LOCK = threading.Lock()
+_SCHEMA_INIT_DONE = False
 _SCHEMA_LOCK = threading.Lock()
 
 
@@ -25,99 +32,151 @@ CREATE TABLE IF NOT EXISTS users (
     email      TEXT NOT NULL,
     name       TEXT,
     picture    TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
     token      TEXT PRIMARY KEY,
     user_id    TEXT NOT NULL,
-    expires_at TIMESTAMP NOT NULL
+    expires_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS watchlists (
     user_id  TEXT NOT NULL,
     symbol   TEXT NOT NULL,
     note     TEXT,
-    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    added_at TIMESTAMPTZ DEFAULT now(),
     PRIMARY KEY (user_id, symbol)
 );
 
 CREATE TABLE IF NOT EXISTS ohlcv_cache (
     ticker     TEXT NOT NULL,
     period     TEXT NOT NULL,
-    fetched_at BIGINT NOT NULL,
-    payload    BLOB NOT NULL,
+    data       BYTEA NOT NULL,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (ticker, period)
 );
 
 CREATE TABLE IF NOT EXISTS news_cache (
     cache_key  TEXT PRIMARY KEY,
     payload    TEXT NOT NULL,
-    fetched_at TIMESTAMP NOT NULL
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS movers_cache (
+    cache_key  TEXT PRIMARY KEY,
+    payload    TEXT NOT NULL,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+    user_id          TEXT PRIMARY KEY,
+    digest_frequency TEXT NOT NULL DEFAULT 'none',
+    digest_email     TEXT,
+    last_sent_at     TIMESTAMPTZ,
+    updated_at       TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS screener_results (
+    id      BIGSERIAL PRIMARY KEY,
+    ran_at  TIMESTAMPTZ DEFAULT now(),
+    payload JSONB NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS symbol_validation_cache (
     symbol     TEXT PRIMARY KEY,
     valid      BOOLEAN NOT NULL,
-    fetched_at TIMESTAMP NOT NULL
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 """
 
 
-def _resolve_db_path(db_path: Optional[str] = None) -> str:
-    if db_path:
-        return db_path
-    return get_settings().BEST7DAYS_DB_PATH
+def _resolve_db_url(db_url: Optional[str] = None) -> str:
+    if db_url:
+        return db_url
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise RuntimeError(
+            "DATABASE_URL not set. Configure your Neon/Postgres connection string."
+        )
+    return url
 
 
-def init_schema(db_path: Optional[str] = None) -> None:
-    """Create tables (idempotent). Safe to call once per process per DB."""
-    path = _resolve_db_path(db_path)
-    with _SCHEMA_LOCK:
-        if path in _SCHEMA_INIT_DONE:
-            return
-        parent = os.path.dirname(path)
-        if parent:
-            os.makedirs(parent, exist_ok=True)
-        with _WRITE_LOCK:
-            conn = duckdb.connect(path)
+def _get_pool(db_url: Optional[str] = None) -> psycopg2.pool.SimpleConnectionPool:
+    """Lazy singleton: create the pool on first use, reuse forever after."""
+    global _POOL
+    if _POOL is not None:
+        return _POOL
+    with _POOL_LOCK:
+        if _POOL is None:
+            url = _resolve_db_url(db_url)
+            _POOL = psycopg2.pool.SimpleConnectionPool(1, 5, url)
+    return _POOL
+
+
+def reset_pool() -> None:
+    """Test helper: tear down the current pool so the next call rebuilds it."""
+    global _POOL
+    with _POOL_LOCK:
+        if _POOL is not None:
             try:
-                # DuckDB requires statements to be executed individually for some versions.
-                for stmt in SCHEMA_SQL.strip().split(";"):
-                    s = stmt.strip()
-                    if s:
-                        conn.execute(s)
-            finally:
-                conn.close()
-        _SCHEMA_INIT_DONE.add(path)
-
-
-@contextmanager
-def get_conn(db_path: Optional[str] = None) -> Iterator[duckdb.DuckDBPyConnection]:
-    """Yield a fresh DuckDB connection. Caller is responsible for transactions."""
-    path = _resolve_db_path(db_path)
-    init_schema(path)
-    conn = duckdb.connect(path)
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-
-@contextmanager
-def get_write_conn(db_path: Optional[str] = None) -> Iterator[duckdb.DuckDBPyConnection]:
-    """Yield a fresh DuckDB connection guarded by the global write lock."""
-    path = _resolve_db_path(db_path)
-    init_schema(path)
-    with _WRITE_LOCK:
-        conn = duckdb.connect(path)
-        try:
-            yield conn
-        finally:
-            conn.close()
+                _POOL.closeall()
+            except Exception:
+                pass
+            _POOL = None
 
 
 def reset_schema_cache() -> None:
-    """Test helper: forget which DB paths have been initialized."""
+    """Test helper: forget the schema-init memoization."""
+    global _SCHEMA_INIT_DONE
     with _SCHEMA_LOCK:
-        _SCHEMA_INIT_DONE.clear()
+        _SCHEMA_INIT_DONE = False
+
+
+def init_schema(db_url: Optional[str] = None) -> None:
+    """Create all tables (idempotent). Call from scripts/migrate.py post-deploy.
+
+    Not invoked on cold-start to keep lambdas snappy. Tests call this explicitly
+    via the ``pg_conn`` fixture.
+    """
+    global _SCHEMA_INIT_DONE
+    with _SCHEMA_LOCK:
+        if _SCHEMA_INIT_DONE:
+            return
+        pool = _get_pool(db_url)
+        conn = pool.getconn()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(SCHEMA_SQL)
+        finally:
+            pool.putconn(conn)
+        _SCHEMA_INIT_DONE = True
+
+
+@contextmanager
+def get_conn(db_url: Optional[str] = None) -> Iterator[psycopg2.extensions.connection]:
+    """Borrow a connection from the pool. Commits on success, rolls back on error.
+
+    Caller uses the connection's cursor() for queries. Postgres handles
+    concurrent reads + writes natively so there's no write-lock anymore.
+    """
+    pool = _get_pool(db_url)
+    conn = pool.getconn()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        pool.putconn(conn)
+
+
+# Backwards-compat alias — the previous DuckDB layer exposed a separate
+# ``get_write_conn`` because DuckDB serialized writes. Postgres doesn't need it,
+# but old call sites still import the name. Both return the same context manager.
+get_write_conn = get_conn

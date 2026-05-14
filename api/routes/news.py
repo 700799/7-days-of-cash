@@ -6,7 +6,7 @@ from typing import List
 from fastapi import APIRouter
 
 from ..models import NewsItem
-from ..news_provider import get_market_news, get_ticker_news
+from ..news_provider import get_market_news, get_ticker_news, get_trending_news
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 
@@ -19,3 +19,9 @@ def ticker_news(symbol: str) -> List[NewsItem]:
 @router.get("/market", response_model=List[NewsItem])
 def market_news() -> List[NewsItem]:
     return [NewsItem(**item) for item in get_market_news()]
+
+
+@router.get("/trending", response_model=List[NewsItem])
+def trending_news() -> List[NewsItem]:
+    """Top 5 market stories drawn from ^GSPC / ^IXIC / ^DJI, deduped + sorted."""
+    return [NewsItem(**item) for item in get_trending_news()]

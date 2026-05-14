@@ -192,7 +192,7 @@ Primary: yfinance (Yahoo Finance)
 ## > WEB APP (NEW)
 
 In addition to the terminal CLI, Best7DaysMula now ships with a full web UI:
-**Next.js 14** frontend + **FastAPI** backend + **DuckDB** storage + **Google OAuth**.
+**Next.js 14** frontend + **FastAPI** backend + **Postgres (Neon)** storage + **Google OAuth**, deployable to **Vercel free tier**.
 
 ### Features
 - Add/remove tickers via a form box; each ticker becomes a CRUD-able pill button
@@ -243,9 +243,75 @@ cd web && npm test     # frontend: 14 tests
 
 ### API surface
 - `GET  /api/auth/me`, `GET /api/auth/login/google`, `POST /api/auth/logout`
-- `GET|POST /api/tickers`, `PATCH|DELETE /api/tickers/{symbol}`
-- `GET  /api/news/ticker/{symbol}`, `GET /api/news/market`
+- `GET|POST /api/tickers`, `PATCH|DELETE /api/tickers/{symbol}`, `GET /api/tickers/defaults`
+- `GET  /api/news/ticker/{symbol}`, `GET /api/news/market`, `GET /api/news/trending`
+- `GET  /api/movers/{symbol}`, `GET /api/movers?symbols=A,B,C`
+- `GET  /api/preferences`, `PATCH /api/preferences`
 - `POST /api/screener/run`
+- `POST /api/cron/refresh`, `POST /api/cron/digest` (Bearer-auth, Vercel Cron only)
+
+---
+
+## > DEPLOY TO VERCEL (FREE)
+
+```bash
+# 1. Create a free Neon Postgres database — https://neon.tech
+#    Copy the connection string (looks like: postgresql://user:pass@xxx.neon.tech/db?sslmode=require)
+
+# 2. Push this branch to GitHub (you've done this already)
+
+# 3. In Vercel:
+#    - Import the repo
+#    - Set environment variables (see .env.example):
+#        DATABASE_URL          (from Neon)
+#        GOOGLE_CLIENT_ID      (from Google Cloud Console OAuth)
+#        GOOGLE_CLIENT_SECRET
+#        SESSION_SECRET        (openssl rand -hex 32)
+#        CRON_SECRET           (openssl rand -hex 32)
+#        FRONTEND_URL          (https://your-app.vercel.app)
+#        BACKEND_URL           (same — they share the domain on Vercel)
+#        RESEND_API_KEY        (optional; if unset, falls back to SMTP)
+#    - Deploy
+
+# 4. After first deploy, run the migration ONCE:
+#    From Vercel CLI:  vercel env pull .env  &&  python scripts/migrate.py
+#    Or trigger /api/cron/refresh manually with the Bearer token.
+```
+
+Free tier limits stay clear because:
+- **Pre-computed screener** — full S&P 500 runs in cron every 4h (writes to Postgres). UI just reads → < 100ms.
+- **Cached everything** — news 4h TTL, movers 4h TTL, symbol validation 24h TTL.
+- **2 cron jobs** total (Vercel Hobby allows 2 free).
+- **No LLM calls** — "why it moved" uses heuristic (price + headlines).
+
+---
+
+## > SECURITY & ABUSE PROTECTION
+
+- **Rate limits** (per-user when logged in via cookie, else per-IP):
+  - 60/min default for cheap reads
+  - 30/min for `/api/news/*`
+  - 20/min for write ops (POST/PATCH/DELETE on watchlist)
+  - 10/min for `/api/auth/*` (slows brute-force)
+  - 5/min for `/api/screener/run` (the only endpoint that hits yfinance live)
+- **CORS**: strict allowlist (no wildcard with credentials), only your `FRONTEND_URL` + dev localhost.
+- **Body cap**: 64 KB max — any oversized POST returns 413 before parsing.
+- **Cron auth**: `/api/cron/*` requires `Authorization: Bearer ${CRON_SECRET}`, timing-safe compared. Returns 503 if `CRON_SECRET` env var is unset (refuse rather than allow).
+- **Live screener cap**: `/api/screener/run` rejects requests with > 50 tickers (use `/api/screener/cached` for the full universe).
+- **Symbol validation cache**: prevents repeated yfinance probing for the same invalid symbol (24h TTL per symbol).
+- **Security headers** (set in `vercel.json`): `X-Frame-Options: DENY`, HSTS preload, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` denying camera/mic/geo.
+- **`X-Robots-Tag: noindex, nofollow`** on every `/api/*` response — search engines won't index your data endpoints.
+- **`robots.txt`** blocks aggressive scrapers (Ahrefs, Semrush, MJ12, DotBot) and disallows crawling of `/api/`.
+
+### Estimated free-tier cost ceiling
+
+| Concern | Mitigation | Result |
+|---|---|---|
+| Yahoo Finance abuse | 4h news cache + 4h movers cache + cron-pre-compute + 5/min `/screener/run` | Effectively no live yfinance hits from public traffic |
+| Vercel function invocations | All reads served from Postgres cache; 2 crons; rate limits | Well under 100k invocations/mo Hobby cap |
+| Neon Postgres usage | Schema fits in < 50 MB; one row/user; cache rows TTL'd | Well under 0.5 GB / 100h compute Hobby cap |
+| Resend email | 1 digest/user/day max enforced server-side via `last_sent_at`; daily cron only | Easily under 100/day Resend free tier |
+| LLM tokens | None used — "why it moved" is heuristic | $0/mo |
 
 ---
 

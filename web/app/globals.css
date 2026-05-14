@@ -4,13 +4,28 @@
 
 :root {
   color-scheme: dark;
+  --line-height-relaxed: 1.6;
+}
+
+html {
+  font-size: 16px;
 }
 
 html,
 body {
   background-color: #000000;
-  color: #00ff7f;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #22ff88;
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
+}
+
+body {
+  line-height: var(--line-height-relaxed);
+}
+
+pre,
+code {
+  line-height: 1.4;
 }
 
 a {
@@ -18,7 +33,7 @@ a {
 }
 
 ::selection {
-  background: #00ff7f;
+  background: #22ff88;
   color: #000000;
 }
 
@@ -28,7 +43,7 @@ a {
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: rgba(0, 255, 127, 0.3);
+  background: rgba(34, 255, 136, 0.3);
 }
 *::-webkit-scrollbar-track {
   background: #000000;

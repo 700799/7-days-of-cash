@@ -15,6 +15,7 @@ from ..auth import (
 )
 from ..config import get_settings
 from ..models import User
+from ..security import AUTH_LIMIT, limiter
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -27,6 +28,7 @@ def _is_secure(url: str) -> bool:
 
 
 @router.get("/login/google")
+@limiter.limit(AUTH_LIMIT)
 async def login_google(request: Request):
     settings = get_settings()
     if not settings.GOOGLE_CLIENT_ID:
@@ -37,6 +39,7 @@ async def login_google(request: Request):
 
 
 @router.get("/callback")
+@limiter.limit(AUTH_LIMIT)
 async def callback(request: Request):
     settings = get_settings()
     oauth = get_oauth()

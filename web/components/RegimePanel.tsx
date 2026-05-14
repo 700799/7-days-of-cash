@@ -6,9 +6,9 @@ type Props = {
 
 function Cell({ label, value }: { label: string; value: unknown }) {
   return (
-    <div className="flex flex-col gap-0.5 px-3 py-1 border-r border-green-500/20 last:border-r-0">
-      <span className="text-green-500/60 uppercase text-[10px]">{label}</span>
-      <span className="text-green-300 uppercase text-sm">
+    <div className="flex flex-col gap-0.5 px-3 py-1 min-h-[80px] justify-center border-r border-green-500/20 last:border-r-0">
+      <span className="text-b7-green-muted uppercase text-xs">{label}</span>
+      <span className="text-b7-green-dim uppercase text-sm">
         {value ? String(value) : "—"}
       </span>
     </div>

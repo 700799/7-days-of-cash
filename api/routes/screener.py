@@ -4,12 +4,18 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..auth import get_current_user_optional
 from ..models import ScreenerRequest, ScreenerResponse, User
+from ..security import EXPENSIVE_LIMIT, limiter
 
 router = APIRouter(prefix="/api/screener", tags=["screener"])
+
+# Hard cap — Vercel Hobby has a 10-second function timeout. ~50 tickers is the
+# largest set the live pipeline can complete in time. Larger universes go
+# through the cron-cached `/cached` endpoint.
+MAX_LIVE_TICKERS = 50
 
 
 def _run_pipeline(
@@ -53,9 +59,19 @@ def _run_pipeline(
 
 
 @router.post("/run", response_model=ScreenerResponse)
+@limiter.limit(EXPENSIVE_LIMIT)
 def run_screener(
+    request: Request,
     payload: ScreenerRequest,
     _user: Optional[User] = Depends(get_current_user_optional),
 ) -> ScreenerResponse:
+    if payload.tickers and len(payload.tickers) > MAX_LIVE_TICKERS:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Live screener accepts up to {MAX_LIVE_TICKERS} tickers. "
+                f"Use GET /api/screener/cached for the full S&P 500."
+            ),
+        )
     out = _run_pipeline(payload.tickers, payload.filters, payload.agents)
     return ScreenerResponse(**out)

@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 def client(tmp_db_path):
     from api.main import create_app
     from api import auth as api_auth
+    from api.db import get_write_conn
     from api.models import User
 
     app = create_app()
@@ -22,6 +23,10 @@ def client(tmp_db_path):
 
     # Make sure the user row exists (for FK-ish consistency, though no FK constraint).
     api_auth.upsert_user(fake_user.id, fake_user.email, fake_user.name, None)
+    # The upsert seeds DEFAULT_TICKERS; clear them so each test starts from a known-empty
+    # watchlist (individual default-seed behavior is exercised in test_defaults.py).
+    with get_write_conn() as c:
+        c.execute("DELETE FROM watchlists WHERE user_id=?", [fake_user.id])
 
     with TestClient(app) as c:
         yield c

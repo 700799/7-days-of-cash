@@ -1,19 +1,20 @@
 """Google OAuth + cookie-based session auth.
 
-Uses Authlib's Starlette OAuth client. Sessions are stored server-side in DuckDB
+Uses Authlib's Starlette OAuth client. Sessions are stored server-side in Postgres
 (`sessions` table) keyed by a random opaque token; the cookie just carries the token.
 """
 from __future__ import annotations
 
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from authlib.integrations.starlette_client import OAuth
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import HTTPException, Request, status
 
 from .config import get_settings
-from .db import get_conn, get_write_conn
+from .db import get_conn
+from .defaults import DEFAULT_TICKERS
 from .models import User
 
 
@@ -45,44 +46,65 @@ def reset_oauth_cache() -> None:
 
 
 def upsert_user(user_id: str, email: str, name: Optional[str], picture: Optional[str]) -> None:
-    with get_write_conn() as c:
-        c.execute(
-            """INSERT INTO users(id,email,name,picture) VALUES (?,?,?,?)
-               ON CONFLICT (id) DO UPDATE SET email=excluded.email,
-                                              name=excluded.name,
-                                              picture=excluded.picture""",
-            [user_id, email, name, picture],
-        )
+    """Insert or update the user row.
+
+    For a brand-new user whose watchlist is empty, seed it with DEFAULT_TICKERS so the
+    landing experience isn't blank. Existing users with non-empty watchlists are left
+    alone (idempotent on repeat logins).
+    """
+    with get_conn() as c:
+        with c.cursor() as cur:
+            cur.execute(
+                """INSERT INTO users(id,email,name,picture) VALUES (%s,%s,%s,%s)
+                   ON CONFLICT (id) DO UPDATE SET email=EXCLUDED.email,
+                                                  name=EXCLUDED.name,
+                                                  picture=EXCLUDED.picture""",
+                [user_id, email, name, picture],
+            )
+            cur.execute(
+                "SELECT 1 FROM watchlists WHERE user_id=%s LIMIT 1",
+                [user_id],
+            )
+            existing = cur.fetchone()
+            if existing is None:
+                cur.executemany(
+                    "INSERT INTO watchlists(user_id, symbol, note) VALUES (%s, %s, NULL)",
+                    [(user_id, sym) for sym in DEFAULT_TICKERS],
+                )
 
 
 def create_session(user_id: str, ttl_days: Optional[int] = None) -> str:
     settings = get_settings()
     ttl = ttl_days if ttl_days is not None else settings.SESSION_TTL_DAYS
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.utcnow() + timedelta(days=ttl)
-    with get_write_conn() as c:
-        c.execute(
-            "INSERT INTO sessions(token,user_id,expires_at) VALUES (?,?,?)",
-            [token, user_id, expires_at],
-        )
+    expires_at = datetime.now(timezone.utc) + timedelta(days=ttl)
+    with get_conn() as c:
+        with c.cursor() as cur:
+            cur.execute(
+                "INSERT INTO sessions(token,user_id,expires_at) VALUES (%s,%s,%s)",
+                [token, user_id, expires_at],
+            )
     return token
 
 
 def delete_session(token: str) -> None:
-    with get_write_conn() as c:
-        c.execute("DELETE FROM sessions WHERE token=?", [token])
+    with get_conn() as c:
+        with c.cursor() as cur:
+            cur.execute("DELETE FROM sessions WHERE token=%s", [token])
 
 
 def lookup_session(token: str) -> Optional[User]:
     if not token:
         return None
     with get_conn() as c:
-        row = c.execute(
-            """SELECT u.id, u.email, u.name, u.picture
-               FROM sessions s JOIN users u ON u.id = s.user_id
-               WHERE s.token = ? AND s.expires_at > CURRENT_TIMESTAMP""",
-            [token],
-        ).fetchone()
+        with c.cursor() as cur:
+            cur.execute(
+                """SELECT u.id, u.email, u.name, u.picture
+                   FROM sessions s JOIN users u ON u.id = s.user_id
+                   WHERE s.token = %s AND s.expires_at > now()""",
+                [token],
+            )
+            row = cur.fetchone()
     if row is None:
         return None
     return User(id=row[0], email=row[1], name=row[2], picture=row[3])

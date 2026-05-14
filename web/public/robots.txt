@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /$
+Allow: /web
+Disallow: /api/
+Disallow: /api/cron/
+Disallow: /api/auth/
+
+# Block known bad bots that scrape pricing data aggressively.
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /

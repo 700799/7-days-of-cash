@@ -1,14 +1,19 @@
-"""yfinance news fetcher with a 15-minute DuckDB-backed cache."""
+"""yfinance news fetcher with a Postgres-backed cache."""
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import yfinance as yf
 
 from .config import get_settings
-from .db import get_conn, get_write_conn
+from .db import get_conn
+
+
+# Indices used to seed the "market trending" mix. These three together give us a
+# reasonably broad cross-section of US large-cap / tech / industrial coverage.
+_TRENDING_INDICES = ("^GSPC", "^IXIC", "^DJI")
 
 
 def _normalize_item(item: Dict[str, Any]) -> Dict[str, Any]:
@@ -62,13 +67,25 @@ def _normalize_item(item: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _publish_epoch(item: Dict[str, Any]) -> int:
+    """Best-effort sort key — older items go to the end."""
+    src = item.get("content", item)
+    pt = src.get("providerPublishTime") or item.get("providerPublishTime")
+    if isinstance(pt, (int, float)):
+        return int(pt)
+    return 0
+
+
 def _read_cache(key: str, ttl_sec: int) -> Optional[List[Dict[str, Any]]]:
-    cutoff = datetime.utcnow() - timedelta(seconds=ttl_sec)
     with get_conn() as c:
-        row = c.execute(
-            "SELECT payload FROM news_cache WHERE cache_key=? AND fetched_at>=?",
-            [key, cutoff],
-        ).fetchone()
+        with c.cursor() as cur:
+            cur.execute(
+                """SELECT payload FROM news_cache
+                   WHERE cache_key=%s
+                     AND fetched_at >= now() - (%s || ' seconds')::interval""",
+                [key, str(ttl_sec)],
+            )
+            row = cur.fetchone()
     if not row:
         return None
     try:
@@ -78,22 +95,24 @@ def _read_cache(key: str, ttl_sec: int) -> Optional[List[Dict[str, Any]]]:
 
 
 def _write_cache(key: str, items: List[Dict[str, Any]]) -> None:
-    with get_write_conn() as c:
-        c.execute(
-            """INSERT INTO news_cache(cache_key, payload, fetched_at)
-               VALUES (?, ?, CURRENT_TIMESTAMP)
-               ON CONFLICT (cache_key) DO UPDATE SET payload=excluded.payload,
-                                                    fetched_at=excluded.fetched_at""",
-            [key, json.dumps(items)],
-        )
+    with get_conn() as c:
+        with c.cursor() as cur:
+            cur.execute(
+                """INSERT INTO news_cache(cache_key, payload, fetched_at)
+                   VALUES (%s, %s, now())
+                   ON CONFLICT (cache_key) DO UPDATE SET payload=EXCLUDED.payload,
+                                                        fetched_at=EXCLUDED.fetched_at""",
+                [key, json.dumps(items)],
+            )
 
 
-def get_ticker_news(symbol: str, limit: int = 10) -> List[Dict[str, Any]]:
+def get_ticker_news(symbol: str, limit: int = 10, force: bool = False) -> List[Dict[str, Any]]:
     settings = get_settings()
     key = f"ticker:{symbol.upper()}"
-    cached = _read_cache(key, settings.NEWS_TTL_SEC)
-    if cached is not None:
-        return cached[:limit]
+    if not force:
+        cached = _read_cache(key, settings.NEWS_TTL_SEC)
+        if cached is not None:
+            return cached[:limit]
 
     try:
         raw = yf.Ticker(symbol).news or []
@@ -105,12 +124,13 @@ def get_ticker_news(symbol: str, limit: int = 10) -> List[Dict[str, Any]]:
     return items
 
 
-def get_market_news(limit: int = 10) -> List[Dict[str, Any]]:
+def get_market_news(limit: int = 10, force: bool = False) -> List[Dict[str, Any]]:
     settings = get_settings()
     key = "market"
-    cached = _read_cache(key, settings.NEWS_TTL_SEC)
-    if cached is not None:
-        return cached[:limit]
+    if not force:
+        cached = _read_cache(key, settings.NEWS_TTL_SEC)
+        if cached is not None:
+            return cached[:limit]
 
     try:
         raw = yf.Ticker("^GSPC").news or []
@@ -118,5 +138,57 @@ def get_market_news(limit: int = 10) -> List[Dict[str, Any]]:
         raw = []
 
     items = [_normalize_item(it) for it in raw[:limit]]
+    _write_cache(key, items)
+    return items
+
+
+# Trending news has its own TTL (1 hour) — the underlying index data doesn't move
+# as quickly as ticker-specific news.
+TRENDING_TTL_SEC = 60 * 60
+
+
+def get_trending_news(limit: int = 5, force: bool = False) -> List[Dict[str, Any]]:
+    """Top market news drawn from the three major US indices.
+
+    Dedupes by URL/title (case-insensitive), then sorts by publish time
+    (newest first) and trims to `limit`. Cached for 1h under the key
+    ``trending`` in `news_cache`.
+    """
+    key = "trending"
+    if not force:
+        cached = _read_cache(key, TRENDING_TTL_SEC)
+        if cached is not None:
+            return cached[:limit]
+
+    raw_pool: List[Dict[str, Any]] = []
+    for sym in _TRENDING_INDICES:
+        try:
+            raw = yf.Ticker(sym).news or []
+        except Exception:
+            raw = []
+        raw_pool.extend(raw)
+
+    # Sort by publish time DESC before dedupe so the newest copy survives.
+    raw_pool.sort(key=_publish_epoch, reverse=True)
+
+    seen_urls: set[str] = set()
+    seen_titles: set[str] = set()
+    deduped: List[Dict[str, Any]] = []
+    for it in raw_pool:
+        norm = _normalize_item(it)
+        url_key = (norm.get("link") or "").strip().lower()
+        title_key = (norm.get("title") or "").strip().lower()
+        if not title_key:
+            continue
+        if url_key and url_key in seen_urls:
+            continue
+        if title_key in seen_titles:
+            continue
+        if url_key:
+            seen_urls.add(url_key)
+        seen_titles.add(title_key)
+        deduped.append(norm)
+
+    items = deduped[:limit]
     _write_cache(key, items)
     return items

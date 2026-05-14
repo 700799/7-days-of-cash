@@ -1,31 +1,41 @@
 """Watchlist CRUD: tickers tied to the authenticated user."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 from typing import List, Optional
 
 import yfinance as yf
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from ..auth import get_current_user, get_current_user_optional
 from ..config import get_settings
-from ..db import get_conn, get_write_conn
+from ..db import get_conn
+from ..defaults import DEFAULT_TICKERS
 from ..models import Ticker, TickerCreate, TickerUpdate, User
+from ..security import WRITE_LIMIT, limiter
 
 router = APIRouter(prefix="/api/tickers", tags=["tickers"])
+
+
+@router.get("/defaults", response_model=List[str])
+def list_default_tickers() -> List[str]:
+    """Default ticker list shown to anonymous users on the home page."""
+    return list(DEFAULT_TICKERS)
 
 
 def _validate_symbol_exists(symbol: str) -> bool:
     """Verify a ticker resolves on yfinance. Cached 24h in symbol_validation_cache."""
     settings = get_settings()
     symbol = symbol.upper()
-    cutoff = datetime.utcnow() - timedelta(seconds=settings.SYMBOL_VALIDATION_TTL_SEC)
 
     with get_conn() as c:
-        row = c.execute(
-            "SELECT valid FROM symbol_validation_cache WHERE symbol=? AND fetched_at>=?",
-            [symbol, cutoff],
-        ).fetchone()
+        with c.cursor() as cur:
+            cur.execute(
+                """SELECT valid FROM symbol_validation_cache
+                   WHERE symbol=%s
+                     AND fetched_at >= now() - (%s || ' seconds')::interval""",
+                [symbol, str(settings.SYMBOL_VALIDATION_TTL_SEC)],
+            )
+            row = cur.fetchone()
     if row is not None:
         return bool(row[0])
 
@@ -37,14 +47,15 @@ def _validate_symbol_exists(symbol: str) -> bool:
     except Exception:
         valid = False
 
-    with get_write_conn() as c:
-        c.execute(
-            """INSERT INTO symbol_validation_cache(symbol, valid, fetched_at)
-               VALUES (?, ?, CURRENT_TIMESTAMP)
-               ON CONFLICT (symbol) DO UPDATE SET valid=excluded.valid,
-                                                 fetched_at=excluded.fetched_at""",
-            [symbol, valid],
-        )
+    with get_conn() as c:
+        with c.cursor() as cur:
+            cur.execute(
+                """INSERT INTO symbol_validation_cache(symbol, valid, fetched_at)
+                   VALUES (%s, %s, now())
+                   ON CONFLICT (symbol) DO UPDATE SET valid=EXCLUDED.valid,
+                                                     fetched_at=EXCLUDED.fetched_at""",
+                [symbol, valid],
+            )
     return valid
 
 
@@ -53,15 +64,22 @@ def list_tickers(user: Optional[User] = Depends(get_current_user_optional)) -> L
     if user is None:
         return []
     with get_conn() as c:
-        rows = c.execute(
-            "SELECT symbol, note, added_at FROM watchlists WHERE user_id=? ORDER BY added_at DESC",
-            [user.id],
-        ).fetchall()
+        with c.cursor() as cur:
+            cur.execute(
+                "SELECT symbol, note, added_at FROM watchlists WHERE user_id=%s ORDER BY added_at DESC",
+                [user.id],
+            )
+            rows = cur.fetchall()
     return [Ticker(symbol=r[0], note=r[1], added_at=r[2]) for r in rows]
 
 
 @router.post("", response_model=Ticker, status_code=status.HTTP_201_CREATED)
-def add_ticker(payload: TickerCreate, user: User = Depends(get_current_user)) -> Ticker:
+@limiter.limit(WRITE_LIMIT)
+def add_ticker(
+    request: Request,
+    payload: TickerCreate,
+    user: User = Depends(get_current_user),
+) -> Ticker:
     symbol = payload.symbol  # already normalized by validator
     if not _validate_symbol_exists(symbol):
         raise HTTPException(
@@ -70,22 +88,24 @@ def add_ticker(payload: TickerCreate, user: User = Depends(get_current_user)) ->
         )
 
     with get_conn() as c:
-        existing = c.execute(
-            "SELECT 1 FROM watchlists WHERE user_id=? AND symbol=?",
-            [user.id, symbol],
-        ).fetchone()
-    if existing is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already in watchlist")
+        with c.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM watchlists WHERE user_id=%s AND symbol=%s",
+                [user.id, symbol],
+            )
+            existing = cur.fetchone()
+            if existing is not None:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already in watchlist")
 
-    with get_write_conn() as c:
-        c.execute(
-            "INSERT INTO watchlists(user_id, symbol, note) VALUES (?, ?, ?)",
-            [user.id, symbol, payload.note],
-        )
-        row = c.execute(
-            "SELECT symbol, note, added_at FROM watchlists WHERE user_id=? AND symbol=?",
-            [user.id, symbol],
-        ).fetchone()
+            cur.execute(
+                "INSERT INTO watchlists(user_id, symbol, note) VALUES (%s, %s, %s)",
+                [user.id, symbol, payload.note],
+            )
+            cur.execute(
+                "SELECT symbol, note, added_at FROM watchlists WHERE user_id=%s AND symbol=%s",
+                [user.id, symbol],
+            )
+            row = cur.fetchone()
     return Ticker(symbol=row[0], note=row[1], added_at=row[2])
 
 
@@ -96,37 +116,41 @@ def update_ticker(
     user: User = Depends(get_current_user),
 ) -> Ticker:
     symbol = symbol.upper()
-    with get_write_conn() as c:
-        existing = c.execute(
-            "SELECT 1 FROM watchlists WHERE user_id=? AND symbol=?",
-            [user.id, symbol],
-        ).fetchone()
-        if existing is None:
-            raise HTTPException(status_code=404, detail="Ticker not in watchlist")
-        c.execute(
-            "UPDATE watchlists SET note=? WHERE user_id=? AND symbol=?",
-            [payload.note, user.id, symbol],
-        )
-        row = c.execute(
-            "SELECT symbol, note, added_at FROM watchlists WHERE user_id=? AND symbol=?",
-            [user.id, symbol],
-        ).fetchone()
+    with get_conn() as c:
+        with c.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM watchlists WHERE user_id=%s AND symbol=%s",
+                [user.id, symbol],
+            )
+            existing = cur.fetchone()
+            if existing is None:
+                raise HTTPException(status_code=404, detail="Ticker not in watchlist")
+            cur.execute(
+                "UPDATE watchlists SET note=%s WHERE user_id=%s AND symbol=%s",
+                [payload.note, user.id, symbol],
+            )
+            cur.execute(
+                "SELECT symbol, note, added_at FROM watchlists WHERE user_id=%s AND symbol=%s",
+                [user.id, symbol],
+            )
+            row = cur.fetchone()
     return Ticker(symbol=row[0], note=row[1], added_at=row[2])
 
 
 @router.delete("/{symbol}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_ticker(symbol: str, user: User = Depends(get_current_user)):
     symbol = symbol.upper()
-    with get_write_conn() as c:
-        cur = c.execute(
-            "DELETE FROM watchlists WHERE user_id=? AND symbol=?",
-            [user.id, symbol],
-        )
-        # DuckDB's rowcount is unreliable in some versions; check existence after.
-        still = c.execute(
-            "SELECT 1 FROM watchlists WHERE user_id=? AND symbol=?",
-            [user.id, symbol],
-        ).fetchone()
+    with get_conn() as c:
+        with c.cursor() as cur:
+            cur.execute(
+                "DELETE FROM watchlists WHERE user_id=%s AND symbol=%s",
+                [user.id, symbol],
+            )
+            cur.execute(
+                "SELECT 1 FROM watchlists WHERE user_id=%s AND symbol=%s",
+                [user.id, symbol],
+            )
+            still = cur.fetchone()
     if still is not None:
         raise HTTPException(status_code=500, detail="Failed to delete")
     return None

@@ -1,9 +1,31 @@
 // Typed API client for the Best7DaysMula FastAPI backend.
 // All requests send cookies (`credentials: "include"`) for auth session.
 
-export const API_URL =
-  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) ||
-  "http://localhost:8000";
+const ENV_API_URL =
+  typeof process !== "undefined" ? process.env.NEXT_PUBLIC_API_URL : undefined;
+
+let warnedMissingApiUrl = false;
+function resolveApiUrl(): string {
+  if (ENV_API_URL) return ENV_API_URL;
+  // In dev, fall back to localhost so the UI keeps working without an env file.
+  if (
+    typeof process !== "undefined" &&
+    process.env.NODE_ENV === "development"
+  ) {
+    return "http://localhost:8000";
+  }
+  // In prod, fail loud rather than silently routing to localhost.
+  if (typeof window !== "undefined" && !warnedMissingApiUrl) {
+    warnedMissingApiUrl = true;
+    // eslint-disable-next-line no-console
+    console.error(
+      "NEXT_PUBLIC_API_URL is not set; API calls will fail.",
+    );
+  }
+  return "";
+}
+
+export const API_URL = resolveApiUrl();
 
 export type User = {
   id: string;
@@ -64,6 +86,35 @@ export type ScreenerRunBody = {
   tickers?: string[];
   filters?: Record<string, unknown>;
   agents?: string[];
+};
+
+export type MoverHeadline = {
+  title: string;
+  link: string;
+  publisher: string;
+  published_at: string;
+};
+
+export type Mover = {
+  symbol: string;
+  price?: number | null;
+  change_7d?: number | null;
+  change_1d?: number | null;
+  summary?: string | null;
+  headlines: MoverHeadline[];
+};
+
+export type DigestFrequency = "none" | "daily" | "weekly";
+
+export type Preferences = {
+  digest_frequency: DigestFrequency;
+  digest_email?: string | null;
+  last_sent_at?: string | null;
+};
+
+export type PreferencesUpdate = {
+  digest_frequency: DigestFrequency;
+  digest_email?: string;
 };
 
 export class ApiError extends Error {
@@ -178,6 +229,42 @@ export function runScreener(
 ): Promise<ScreenerPayload> {
   return request<ScreenerPayload>("/api/screener/run", {
     method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+// ----- defaults -----
+export function getTickerDefaults(): Promise<string[]> {
+  return request<string[]>("/api/tickers/defaults");
+}
+
+// ----- movers -----
+export function getMovers(symbols: string[]): Promise<Mover[]> {
+  const qs = symbols.length
+    ? `?symbols=${encodeURIComponent(symbols.join(","))}`
+    : "";
+  return request<Mover[]>(`/api/movers${qs}`);
+}
+
+export function getMover(symbol: string): Promise<Mover> {
+  return request<Mover>(`/api/movers/${encodeURIComponent(symbol)}`);
+}
+
+// ----- trending news -----
+export function getTrendingNews(): Promise<NewsItem[]> {
+  return request<NewsItem[]>("/api/news/trending");
+}
+
+// ----- preferences -----
+export function getPreferences(): Promise<Preferences> {
+  return request<Preferences>("/api/preferences");
+}
+
+export function updatePreferences(
+  body: PreferencesUpdate,
+): Promise<Preferences> {
+  return request<Preferences>("/api/preferences", {
+    method: "PATCH",
     body: JSON.stringify(body),
   });
 }

@@ -9,13 +9,15 @@ const ART = String.raw`
 
 export function Banner() {
   return (
-    <header className="w-full border-b border-green-500/40 bg-black">
-      <pre
-        aria-label="BEST 7 DAYS MULA"
-        className="text-green-400 text-[10px] sm:text-xs md:text-sm leading-tight px-4 py-3 overflow-x-auto whitespace-pre"
-      >
-        {ART}
-      </pre>
+    <header className="w-full border-b border-b7-green-border bg-black">
+      <div className="overflow-x-auto">
+        <pre
+          aria-label="BEST 7 DAYS MULA"
+          className="text-b7-green text-xs sm:text-sm md:text-base leading-tight px-4 py-3 whitespace-pre"
+        >
+          {ART}
+        </pre>
+      </div>
     </header>
   );
 }

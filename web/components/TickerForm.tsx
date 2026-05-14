@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useSWRConfig } from "swr";
 import { addTicker, ApiError, type Ticker } from "@/lib/api";
 
@@ -15,11 +15,21 @@ export function TickerForm({ disabled = false }: Props) {
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { mutate } = useSWRConfig();
+
+  // Clean up success flash timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
     const sym = symbol.trim().toUpperCase();
     if (!sym) {
       setError("symbol required");
@@ -56,11 +66,18 @@ export function TickerForm({ disabled = false }: Props) {
       );
       setSymbol("");
       setNote("");
+      setSuccess(`✓ Added ${sym}`);
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+      successTimerRef.current = setTimeout(() => setSuccess(null), 2000);
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.status === 409) setError("ticker already in watchlist");
-        else if (err.status === 422) setError("invalid ticker symbol");
-        else setError(err.message || "failed to add ticker");
+        if (err.status === 409) {
+          setError("Already in your watchlist.");
+        } else if (err.status === 422) {
+          setError("Couldn't find that symbol — check spelling?");
+        } else {
+          setError(err.message || "failed to add ticker");
+        }
       } else {
         setError("network error");
       }
@@ -72,10 +89,10 @@ export function TickerForm({ disabled = false }: Props) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="border border-green-500/40 p-3 bg-black"
+      className="border border-b7-green-border p-3 bg-black"
       aria-label="add ticker"
     >
-      <h3 className="text-green-400 uppercase text-sm mb-2">{`> ADD TICKER`}</h3>
+      <h3 className="text-b7-green uppercase text-sm mb-2">{`> ADD TICKER`}</h3>
       <div className="flex flex-col sm:flex-row gap-2">
         <input
           aria-label="ticker symbol"
@@ -83,7 +100,7 @@ export function TickerForm({ disabled = false }: Props) {
           value={symbol}
           onChange={(e) => setSymbol(e.target.value.toUpperCase())}
           placeholder="AAPL"
-          className="bg-black border border-green-500/40 text-green-400 px-2 py-1 uppercase placeholder:text-green-700 focus:outline-none focus:border-green-400 w-32"
+          className="bg-black border border-b7-green-border text-b7-green px-2 py-1 uppercase placeholder:text-green-700 focus:outline-none focus:ring-2 focus:ring-b7-green focus:border-b7-green w-32"
           maxLength={10}
           autoComplete="off"
         />
@@ -93,14 +110,14 @@ export function TickerForm({ disabled = false }: Props) {
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="optional note"
-          className="bg-black border border-green-500/40 text-green-400 px-2 py-1 placeholder:text-green-700 focus:outline-none focus:border-green-400 flex-1"
+          className="bg-black border border-b7-green-border text-b7-green px-2 py-1 placeholder:text-green-700 focus:outline-none focus:ring-2 focus:ring-b7-green focus:border-b7-green flex-1"
           maxLength={200}
           autoComplete="off"
         />
         <button
           type="submit"
           disabled={busy}
-          className="inline-flex items-center gap-2 px-3 py-1 border border-green-500/60 text-green-400 hover:bg-green-500/10 hover:text-green-300 transition rounded-sm uppercase text-xs disabled:opacity-50"
+          className="inline-flex items-center gap-2 px-3 py-1 border border-b7-green-border text-b7-green hover:bg-green-500/10 hover:text-b7-green-dim transition rounded-sm uppercase text-xs disabled:opacity-50"
         >
           <Plus size={14} />
           {busy ? "adding…" : "[ + ADD ]"}
@@ -109,6 +126,15 @@ export function TickerForm({ disabled = false }: Props) {
       {error && (
         <div role="alert" className="mt-2 text-red-400 text-xs uppercase">
           {`! ${error}`}
+        </div>
+      )}
+      {success && (
+        <div
+          role="status"
+          data-testid="ticker-form-success"
+          className="mt-2 text-b7-green-dim text-xs uppercase"
+        >
+          {success}
         </div>
       )}
     </form>

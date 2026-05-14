@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Pencil, X } from "lucide-react";
+import { Check, Lock, Pencil, X } from "lucide-react";
 import { useState } from "react";
 import { useSWRConfig } from "swr";
 import {
@@ -12,9 +12,14 @@ import {
 type Props = {
   tickers: Ticker[];
   signedIn: boolean;
+  /**
+   * When the user is anonymous and `tickers` is empty, these symbols are
+   * rendered as non-deletable "default" pills. Ignored for signed-in users.
+   */
+  defaults?: string[];
 };
 
-export function TickerPills({ tickers, signedIn }: Props) {
+export function TickerPills({ tickers, signedIn, defaults = [] }: Props) {
   const { mutate } = useSWRConfig();
   const [editing, setEditing] = useState<string | null>(null);
   const [editNote, setEditNote] = useState<string>("");
@@ -64,6 +69,36 @@ export function TickerPills({ tickers, signedIn }: Props) {
     );
     setEditing(null);
     setEditNote("");
+  }
+
+  // Anonymous users: render defaults as non-deletable pills.
+  if (!signedIn && tickers.length === 0 && defaults.length > 0) {
+    return (
+      <div className="mt-2 space-y-2">
+        <div
+          className="flex flex-wrap gap-2"
+          data-testid="ticker-pills-defaults"
+        >
+          {defaults.map((sym) => (
+            <span
+              key={sym}
+              data-testid={`pill-default-${sym}`}
+              title="Sign in to customize your watchlist."
+              className="inline-flex items-center gap-2 px-3 py-1 border border-b7-green-border text-b7-green-dim rounded-sm uppercase text-xs cursor-default"
+            >
+              <Lock size={12} aria-hidden="true" />
+              <span className="tracking-wider">{sym}</span>
+              <span className="text-b7-green-muted lowercase text-xs">
+                (default)
+              </span>
+            </span>
+          ))}
+        </div>
+        <div className="text-b7-green-muted text-xs uppercase">
+          {`> Sign in to customize your watchlist.`}
+        </div>
+      </div>
+    );
   }
 
   if (tickers.length === 0) {
@@ -117,7 +152,7 @@ export function TickerPills({ tickers, signedIn }: Props) {
                   aria-label={`note for ${t.symbol}`}
                   value={editNote}
                   onChange={(e) => setEditNote(e.target.value)}
-                  className="bg-black border border-green-500/40 text-green-400 px-2 py-0.5 text-xs focus:outline-none focus:border-green-400 w-40"
+                  className="bg-black border border-b7-green-border text-b7-green px-2 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-b7-green focus:border-b7-green w-40"
                   maxLength={200}
                 />
                 <button
