@@ -189,4 +189,64 @@ Primary: yfinance (Yahoo Finance)
 
 ---
 
-Free. No API key required. Run it daily.
+## > WEB APP (NEW)
+
+In addition to the terminal CLI, Best7DaysMula now ships with a full web UI:
+**Next.js 14** frontend + **FastAPI** backend + **DuckDB** storage + **Google OAuth**.
+
+### Features
+- Add/remove tickers via a form box; each ticker becomes a CRUD-able pill button
+- Per-ticker news + general market news at the bottom of every page
+- Sign in with Google to save your watchlist across sessions
+- Run the screener against your watchlist or the full S&P 500 universe
+
+### Quickstart
+
+```bash
+# 1. Backend
+cp .env.example .env
+# edit .env: paste your GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET
+# generate a session secret:  openssl rand -hex 32
+pip install -r requirements.txt
+./scripts/run_api.sh                 # http://localhost:8000
+
+# 2. Frontend (in a second terminal)
+cd web
+cp .env.local.example .env.local
+npm install
+npm run dev                          # http://localhost:3000
+```
+
+### Google OAuth setup
+1. Go to https://console.cloud.google.com → APIs & Services → Credentials
+2. Create OAuth 2.0 Client ID (Web application)
+3. Authorized redirect URI: `http://localhost:8000/api/auth/callback`
+4. Copy the Client ID and Secret into `.env`
+
+### Architecture
+
+```
+Best7DaysMula/
+├── screener/          # Original CLI engine (agents, metrics, filters)
+├── api/               # FastAPI backend (auth, tickers, news, screener)
+├── web/               # Next.js 14 frontend (App Router, Tailwind, Vitest)
+├── tests/             # Pytest suite — 55 tests covering both engine + API
+└── data/              # DuckDB file (gitignored)
+```
+
+### Tests
+
+```bash
+pytest                 # backend: 55 tests
+cd web && npm test     # frontend: 14 tests
+```
+
+### API surface
+- `GET  /api/auth/me`, `GET /api/auth/login/google`, `POST /api/auth/logout`
+- `GET|POST /api/tickers`, `PATCH|DELETE /api/tickers/{symbol}`
+- `GET  /api/news/ticker/{symbol}`, `GET /api/news/market`
+- `POST /api/screener/run`
+
+---
+
+Free. No API key required for the CLI. Run it daily.

@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Environment
+.env
+.env.local
+*.env
+
+# Data / cache
+data/
+*.duckdb
+*.duckdb.wal
+outputs/
+logs/
+*.log
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+coverage/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp

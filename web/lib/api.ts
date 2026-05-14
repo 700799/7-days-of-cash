@@ -1,0 +1,183 @@
+// Typed API client for the Best7DaysMula FastAPI backend.
+// All requests send cookies (`credentials: "include"`) for auth session.
+
+export const API_URL =
+  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) ||
+  "http://localhost:8000";
+
+export type User = {
+  id: string;
+  email: string;
+  name: string;
+  picture?: string;
+};
+
+export type Ticker = {
+  symbol: string;
+  note?: string | null;
+  added_at: string;
+};
+
+export type NewsItem = {
+  title: string;
+  publisher: string;
+  link: string;
+  published_at: string;
+  thumbnail?: string | null;
+};
+
+export type ScreenerResultRow = {
+  ticker: string;
+  price?: number;
+  ret_7d?: number;
+  score?: number;
+  momentum?: number;
+  breakout?: number;
+  volume?: number;
+  rs?: number;
+  mean_reversion?: number;
+  best_strategy?: string;
+  vs_voo?: number;
+  [key: string]: unknown;
+};
+
+export type Regime = {
+  trend?: string;
+  risk?: string;
+  leadership?: string;
+  [key: string]: unknown;
+};
+
+export type Benchmark = {
+  symbol: string;
+  ret_7d: number;
+};
+
+export type ScreenerPayload = {
+  regime: Regime;
+  benchmarks: Benchmark[];
+  results: ScreenerResultRow[];
+  ran_at: string;
+};
+
+export type ScreenerRunBody = {
+  tickers?: string[];
+  filters?: Record<string, unknown>;
+  agents?: string[];
+};
+
+export class ApiError extends Error {
+  status: number;
+  body: unknown;
+  constructor(message: string, status: number, body: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const url = `${API_URL}${path}`;
+  const headers = new Headers(init.headers || {});
+  if (init.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  headers.set("Accept", "application/json");
+
+  const res = await fetch(url, {
+    ...init,
+    headers,
+    credentials: "include",
+  });
+
+  if (res.status === 204) {
+    return undefined as unknown as T;
+  }
+
+  const text = await res.text();
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = text;
+    }
+  }
+
+  if (!res.ok) {
+    const msg =
+      (body && typeof body === "object" && "detail" in (body as object)
+        ? String((body as { detail: unknown }).detail)
+        : res.statusText) || `HTTP ${res.status}`;
+    throw new ApiError(msg, res.status, body);
+  }
+
+  return body as T;
+}
+
+// ----- auth -----
+export const loginUrl = (): string =>
+  `${API_URL}/api/auth/login/google`;
+
+export async function getMe(): Promise<User | null> {
+  try {
+    return await request<User>("/api/auth/me");
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) return null;
+    throw err;
+  }
+}
+
+export async function logout(): Promise<void> {
+  await request<void>("/api/auth/logout", { method: "POST" });
+}
+
+// ----- tickers -----
+export function listTickers(): Promise<Ticker[]> {
+  return request<Ticker[]>("/api/tickers");
+}
+
+export function addTicker(symbol: string, note?: string): Promise<Ticker> {
+  return request<Ticker>("/api/tickers", {
+    method: "POST",
+    body: JSON.stringify({ symbol: symbol.toUpperCase(), note }),
+  });
+}
+
+export function updateTicker(symbol: string, note: string): Promise<Ticker> {
+  return request<Ticker>(`/api/tickers/${encodeURIComponent(symbol)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ note }),
+  });
+}
+
+export function deleteTicker(symbol: string): Promise<void> {
+  return request<void>(`/api/tickers/${encodeURIComponent(symbol)}`, {
+    method: "DELETE",
+  });
+}
+
+// ----- news -----
+export function getTickerNews(symbol: string): Promise<NewsItem[]> {
+  return request<NewsItem[]>(
+    `/api/news/ticker/${encodeURIComponent(symbol)}`,
+  );
+}
+
+export function getMarketNews(): Promise<NewsItem[]> {
+  return request<NewsItem[]>("/api/news/market");
+}
+
+// ----- screener -----
+export function runScreener(
+  body: ScreenerRunBody = {},
+): Promise<ScreenerPayload> {
+  return request<ScreenerPayload>("/api/screener/run", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
