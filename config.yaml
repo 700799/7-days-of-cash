@@ -1,0 +1,30 @@
+filters:
+  min_price: 2.00
+  min_gain_7d: 8.0
+  min_avg_volume: 500000
+  max_rsi: 80
+  market_cap: "all"        # small | mid | large | all
+  exclude_extreme_volatility: true
+
+output:
+  top_n: 25
+  save_csv: true
+  save_json: false
+  output_dir: "outputs"
+
+fetch:
+  chunk_size: 100
+  sleep_between_chunks: 2
+  max_retries: 3
+  period: "35d"
+
+benchmarks:
+  - ticker: "VOO"
+    name: "S&P 500 (VOO)"
+    description: "Large-cap US equities"
+  - ticker: "VXF"
+    name: "Extended Market (VXF)"
+    description: "Small+mid-cap US (ex-S&P 500)"
+  - ticker: "VTIAX"
+    name: "Total Intl (VTIAX)"
+    description: "International developed + EM"

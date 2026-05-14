@@ -1,0 +1,50 @@
+from typing import Dict, Any, List
+
+import pandas as pd
+
+
+def apply_filters(records: List[Dict[str, Any]], config: Dict[str, Any]) -> pd.DataFrame:
+    if not records:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(records)
+
+    active = config.get("active_filters", set())
+    # If no pill selection made, apply all defaults
+    if not active:
+        active = {
+            "min_price", "min_gain_7d", "min_avg_volume",
+            "max_rsi", "market_cap", "exclude_volatility"
+        }
+
+    mask = pd.Series([True] * len(df), index=df.index)
+
+    if "min_price" in active:
+        mask &= df["price"] >= config.get("min_price", 2.0)
+
+    if "min_gain_7d" in active:
+        mask &= df["change_7d"] >= config.get("min_gain_7d", 8.0)
+
+    if "min_avg_volume" in active:
+        mask &= df["avg_vol_20d"] >= config.get("min_avg_volume", 500_000)
+
+    if "max_rsi" in active:
+        mask &= df["rsi_14"] <= config.get("max_rsi", 80)
+
+    if "exclude_volatility" in active and config.get("exclude_extreme_volatility", True):
+        mask &= df["avg_range_pct"] <= 50.0
+
+    if "market_cap" in active:
+        cap_filter = config.get("market_cap", "all")
+        if cap_filter != "all" and "market_cap_val" in df.columns:
+            if cap_filter == "small":
+                mask &= df["market_cap_val"] < 2e9
+            elif cap_filter == "mid":
+                mask &= (df["market_cap_val"] >= 2e9) & (df["market_cap_val"] < 10e9)
+            elif cap_filter == "large":
+                mask &= df["market_cap_val"] >= 10e9
+
+    filtered = df[mask].copy()
+    filtered = filtered.sort_values("change_7d", ascending=False)
+    top_n = config.get("top_n", 25)
+    return filtered.head(top_n).reset_index(drop=True)
