@@ -1,0 +1,38 @@
+# Best7DaysMula configuration. CLI flags override these.
+
+filters:
+  min_price: 2.00
+  min_gain_7d: 8.0
+  min_avg_volume: 500000
+  min_dollar_vol: 5000000        # $5M daily dollar volume
+  max_rsi: 80
+  min_pct_52w_high: -15.0        # within 15% of 52-week high
+  max_avg_range_pct: 50.0
+  market_cap: "all"              # small | mid | large | all
+  exclude_extreme_volatility: true
+
+agents:
+  # Active strategy agents (comma-listed via --agents to subset)
+  agent_names:
+    - momentum
+    - breakout
+    - volume_surge
+    - relative_strength
+    - mean_reversion
+
+output:
+  top_n: 25
+  output_dir: "outputs"
+  formats:
+    - csv
+    - json
+
+fetch:
+  chunk_size: 60
+  max_workers: 4
+  sleep_between_chunks: 0.5
+  max_retries: 3
+  period: "35d"
+
+cache:
+  cache_ttl: 3600                # seconds (1 hour)
