@@ -75,3 +75,38 @@ def run_screener(
         )
     out = _run_pipeline(payload.tickers, payload.filters, payload.agents)
     return ScreenerResponse(**out)
+
+
+@router.get("/cached", response_model=ScreenerResponse)
+def get_cached_screener(
+    _user: Optional[User] = Depends(get_current_user_optional),
+) -> ScreenerResponse:
+    """Return latest pre-computed screener results (updated every 4 hours via cron).
+
+    Returns instantly from Postgres cache. Never hits yfinance live.
+    """
+    import json
+    from ..db import get_conn
+
+    try:
+        with get_conn() as c:
+            with c.cursor() as cur:
+                cur.execute(
+                    """SELECT ran_at, payload FROM screener_results
+                       ORDER BY ran_at DESC LIMIT 1"""
+                )
+                row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="No cached results yet. Cron will populate them.")
+        ran_at_str, payload_str = row
+        payload = json.loads(payload_str)
+        return ScreenerResponse(
+            regime={},
+            benchmarks={},
+            results=payload.get("results", []),
+            ran_at=ran_at_str,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch cached results: {e}")
