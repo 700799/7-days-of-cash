@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Play } from "lucide-react";
+import { Loader2, Play, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AuthButton } from "@/components/AuthButton";
 import { useAuth } from "@/components/AuthProvider";
@@ -15,16 +15,25 @@ import { TickerForm } from "@/components/TickerForm";
 import { TickerPills } from "@/components/TickerPills";
 import { TrendingNews } from "@/components/TrendingNews";
 import { runScreener, type ScreenerPayload } from "@/lib/api";
-import { useDefaults, useTickers } from "@/lib/hooks";
+import { useCachedScreener, useDefaults, useTickers } from "@/lib/hooks";
 
 export default function HomePage() {
   const { user, loading: authLoading } = useAuth();
   const signedIn = !!user;
   const { tickers } = useTickers(signedIn);
   const { defaults } = useDefaults();
+
+  // Pre-computed results (loads instantly from Postgres cache, refreshed every 4h by cron)
+  const { payload: cached, loading: cachedLoading } = useCachedScreener();
+
+  // Live override — user-triggered run against their watchlist
   const [running, setRunning] = useState(false);
-  const [payload, setPayload] = useState<ScreenerPayload | null>(null);
+  const [livePayload, setLivePayload] = useState<ScreenerPayload | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+
+  // Show live results if they exist, else fall back to pre-computed cache
+  const payload = livePayload ?? cached;
+  const isLive = !!livePayload;
 
   const watchSymbols = tickers.map((t) => t.symbol);
   const resultSymbols = (payload?.results ?? []).map((r) => r.ticker);
@@ -52,12 +61,26 @@ export default function HomePage() {
       const res = await runScreener(
         symbols.length > 0 ? { tickers: symbols } : {},
       );
-      setPayload(res);
+      setLivePayload(res);
     } catch (err) {
       setRunError(err instanceof Error ? err.message : "screener failed");
     } finally {
       setRunning(false);
     }
+  }
+
+  function handleResetToCache() {
+    setLivePayload(null);
+    setRunError(null);
+  }
+
+  function fmtAge(ranAt: string): string {
+    const diffMs = Date.now() - new Date(ranAt).getTime();
+    const mins = Math.round(diffMs / 60_000);
+    if (mins < 2) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.round(mins / 60);
+    return `${hrs}h ago`;
   }
 
   return (
@@ -89,13 +112,14 @@ export default function HomePage() {
           />
         </section>
 
-        <div>
+        {/* Screener controls row */}
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={handleRun}
             disabled={running}
             aria-busy={running}
-            className="inline-flex items-center gap-2 px-3 py-1 border border-b7-green-border text-b7-green hover:bg-green-500/10 hover:text-b7-green-dim transition rounded-sm uppercase text-xs disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-3 py-1 border border-b7-green-border text-b7-green hover:bg-b7-green/10 hover:text-b7-green-dim transition rounded-sm uppercase text-xs disabled:opacity-50"
           >
             {running ? (
               <>
@@ -105,23 +129,47 @@ export default function HomePage() {
             ) : (
               <>
                 <Play size={14} aria-hidden="true" />
-                <span>[ &gt; RUN SCREENER ]</span>
+                <span>[ &gt; RUN ON WATCHLIST ]</span>
               </>
             )}
           </button>
-          {runError && (
-            <span className="ml-3 text-red-400 text-xs uppercase">
-              {`! ${runError}`}
+
+          {isLive && (
+            <button
+              type="button"
+              onClick={handleResetToCache}
+              className="inline-flex items-center gap-2 px-3 py-1 border border-b7-green-border/60 text-b7-green-muted hover:text-b7-green transition rounded-sm uppercase text-xs"
+            >
+              <RefreshCw size={12} aria-hidden="true" />
+              <span>[ SHOW FULL MARKET ]</span>
+            </button>
+          )}
+
+          {/* Status badge */}
+          {!running && payload?.ran_at && (
+            <span className="text-b7-green-muted text-xs uppercase">
+              {isLive ? (
+                <span className="text-b7-green">● LIVE — watchlist</span>
+              ) : (
+                <span>
+                  ○ CACHED — full S&P 500 ·{" "}
+                  {fmtAge(payload.ran_at)}
+                </span>
+              )}
             </span>
           )}
-          {payload?.ran_at && (
-            <span className="ml-3 text-b7-green-muted text-xs uppercase">
-              {`last ran: ${new Date(payload.ran_at).toLocaleString()}`}
+
+          {runError && (
+            <span className="text-red-400 text-xs uppercase">
+              {`! ${runError}`}
             </span>
           )}
         </div>
 
-        <ScreenerResults results={payload?.results ?? []} loading={running} />
+        <ScreenerResults
+          results={payload?.results ?? []}
+          loading={running || (!payload && cachedLoading)}
+        />
 
         <MoversList symbols={mergedSymbols} />
 

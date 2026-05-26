@@ -52,7 +52,7 @@ export function MoversList({ symbols }: Props) {
       )}
 
       {symbols.length > 0 && !loading && !error && movers.length === 0 && (
-        <div className="text-green-500/60 text-xs uppercase">
+        <div className="text-b7-green-muted text-xs uppercase">
           {`> No movers to display.`}
         </div>
       )}

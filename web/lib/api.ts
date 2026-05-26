@@ -233,6 +233,10 @@ export function runScreener(
   });
 }
 
+export function getCachedScreener(): Promise<ScreenerPayload> {
+  return request<ScreenerPayload>("/api/screener/cached");
+}
+
 // ----- defaults -----
 export function getTickerDefaults(): Promise<string[]> {
   return request<string[]>("/api/tickers/defaults");

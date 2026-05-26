@@ -17,8 +17,8 @@ function Cell({ label, value }: { label: string; value: unknown }) {
 
 export function RegimePanel({ regime }: Props) {
   return (
-    <div className="border border-green-500/40 bg-black flex flex-wrap items-stretch">
-      <div className="px-3 py-1 border-r border-green-500/40 flex items-center text-green-400 uppercase text-xs">
+    <div className="border border-b7-green-border/40 bg-black flex flex-wrap items-stretch">
+      <div className="px-3 py-1 border-r border-b7-green-border/40 flex items-center text-b7-green-dim uppercase text-xs">
         {`> REGIME`}
       </div>
       <Cell label="trend" value={regime?.trend} />

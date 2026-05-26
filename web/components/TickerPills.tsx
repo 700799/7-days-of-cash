@@ -103,7 +103,7 @@ export function TickerPills({ tickers, signedIn, defaults = [] }: Props) {
 
   if (tickers.length === 0) {
     return (
-      <div className="text-green-500/60 text-xs uppercase mt-2">
+      <div className="text-b7-green-muted text-xs uppercase mt-2">
         {signedIn
           ? `> NO TICKERS ADDED — add one above`
           : `> NO TICKERS ADDED — sign in to save your watchlist`}
@@ -117,7 +117,7 @@ export function TickerPills({ tickers, signedIn, defaults = [] }: Props) {
         {tickers.map((t) => (
           <div key={t.symbol} className="flex flex-col gap-1">
             <span
-              className="inline-flex items-center gap-2 px-3 py-1 border border-green-500/60 text-green-400 hover:bg-green-500/10 hover:text-green-300 transition rounded-sm uppercase text-xs"
+              className="inline-flex items-center gap-2 px-3 py-1 border border-b7-green-border/60 text-b7-green-dim hover:bg-b7-green/10 hover:text-b7-green transition rounded-sm uppercase text-xs"
               data-testid={`pill-${t.symbol}`}
             >
               <button
@@ -159,7 +159,7 @@ export function TickerPills({ tickers, signedIn, defaults = [] }: Props) {
                   type="button"
                   onClick={() => saveEdit(t.symbol)}
                   aria-label={`save note for ${t.symbol}`}
-                  className="text-green-400 hover:text-green-300"
+                  className="text-b7-green-dim hover:text-b7-green"
                 >
                   <Check size={14} />
                 </button>
@@ -167,7 +167,7 @@ export function TickerPills({ tickers, signedIn, defaults = [] }: Props) {
                   type="button"
                   onClick={() => setEditing(null)}
                   aria-label="cancel"
-                  className="text-green-500/60 hover:text-red-400"
+                  className="text-b7-green-muted hover:text-red-400"
                 >
                   <X size={14} />
                 </button>

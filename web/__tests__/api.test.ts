@@ -3,6 +3,7 @@ import {
   ApiError,
   addTicker,
   deleteTicker,
+  getCachedScreener,
   getMe,
   listTickers,
 } from "@/lib/api";
@@ -70,6 +71,29 @@ describe("api fetch wrapper", () => {
   it("handles 204 no-content responses", async () => {
     mockFetch(() => new Response(null, { status: 204 }));
     await expect(deleteTicker("AAPL")).resolves.toBeUndefined();
+  });
+
+  it("getCachedScreener fetches GET /api/screener/cached", async () => {
+    const fakePayload = {
+      regime: {},
+      benchmarks: [],
+      results: [{ ticker: "NVDA", ret_7d: 8.5, score: 87.3 }],
+      ran_at: "2024-01-15T12:00:00Z",
+    };
+    mockFetch(
+      () =>
+        new Response(JSON.stringify(fakePayload), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    const result = await getCachedScreener();
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].ticker).toBe("NVDA");
+    const call = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    expect(call[0]).toContain("/api/screener/cached");
+    expect(call[1]?.method).toBeUndefined(); // GET = no method override
   });
 
   it("sets JSON content-type when body is provided", async () => {

@@ -2,6 +2,7 @@
 
 import useSWR from "swr";
 import {
+  getCachedScreener,
   getMarketNews,
   getMe,
   getMover,
@@ -14,6 +15,7 @@ import {
   type Mover,
   type NewsItem,
   type Preferences,
+  type ScreenerPayload,
   type Ticker,
   type User,
 } from "./api";
@@ -107,6 +109,25 @@ export function useTrendingNews() {
     },
   );
   return { news: data ?? [], error, loading: isLoading };
+}
+
+export function useCachedScreener() {
+  const { data, error, isLoading } = useSWR<ScreenerPayload>(
+    "screener:cached",
+    () => getCachedScreener(),
+    {
+      ...BASE_SWR,
+      // Refresh every 4 hours to stay in sync with cron
+      refreshInterval: 4 * 60 * 60 * 1000,
+      // Don't treat 404 as a retry-able error — it just means no cache yet
+      onErrorRetry: (err, _key, _config, revalidate, { retryCount }) => {
+        if (err?.status === 404) return;
+        if (retryCount >= 3) return;
+        setTimeout(() => revalidate({ retryCount }), 30_000);
+      },
+    },
+  );
+  return { payload: data ?? null, error, loading: isLoading };
 }
 
 export function usePreferences(enabled: boolean = true) {

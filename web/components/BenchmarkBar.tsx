@@ -18,12 +18,12 @@ export function BenchmarkBar({ benchmarks }: Props) {
   const all = [...ordered, ...extras];
 
   return (
-    <div className="border border-green-500/40 bg-black flex flex-wrap items-stretch">
-      <div className="px-3 py-1 border-r border-green-500/40 flex items-center text-green-400 uppercase text-xs">
+    <div className="border border-b7-green-border/40 bg-black flex flex-wrap items-stretch">
+      <div className="px-3 py-1 border-r border-b7-green-border/40 flex items-center text-b7-green-dim uppercase text-xs">
         {`> BENCH 7D`}
       </div>
       {all.length === 0 && (
-        <div className="px-3 py-1 text-green-500/60 text-xs uppercase">
+        <div className="px-3 py-1 text-b7-green-muted text-xs uppercase">
           no data
         </div>
       )}
@@ -34,13 +34,13 @@ export function BenchmarkBar({ benchmarks }: Props) {
             key={b.symbol}
             className="flex items-center gap-2 px-3 py-1 border-r border-green-500/20 last:border-r-0"
           >
-            <span className="text-green-400 uppercase text-xs">
+            <span className="text-b7-green-dim uppercase text-xs">
               {b.symbol}
             </span>
             <span
               className={clsx(
                 "text-xs",
-                positive ? "text-green-400" : "text-red-400",
+                positive ? "text-b7-green-dim" : "text-red-400",
               )}
             >
               {`${positive ? "+" : ""}${b.ret_7d.toFixed(2)}%`}

@@ -14,15 +14,15 @@ function MarketSection() {
   const { news, loading, error } = useMarketNews();
   return (
     <section className="space-y-2">
-      <h3 className="text-green-400 uppercase text-sm">{`> MARKET NEWS`}</h3>
+      <h3 className="text-b7-green-dim uppercase text-sm">{`> MARKET NEWS`}</h3>
       {loading && (
-        <div className="text-green-500/60 text-xs uppercase">loading…</div>
+        <div className="text-b7-green-muted text-xs uppercase">loading…</div>
       )}
       {error && (
         <div className="text-red-400 text-xs uppercase">! failed to load</div>
       )}
       {!loading && !error && news.length === 0 && (
-        <div className="text-green-500/60 text-xs uppercase">no news</div>
+        <div className="text-b7-green-muted text-xs uppercase">no news</div>
       )}
       <div className="grid sm:grid-cols-2 gap-2">
         {news.map((n, i) => (
@@ -49,7 +49,7 @@ function TickerSection({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="w-full flex items-center justify-between px-2 py-1 text-green-400 uppercase text-sm hover:bg-green-500/5"
+        className="w-full flex items-center justify-between px-2 py-1 text-b7-green-dim uppercase text-sm hover:bg-b7-green/5"
       >
         <span>{`> NEWS — ${symbol}`}</span>
         {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -57,7 +57,7 @@ function TickerSection({
       {open && (
         <div className="p-2 space-y-2">
           {loading && (
-            <div className="text-green-500/60 text-xs uppercase">loading…</div>
+            <div className="text-b7-green-muted text-xs uppercase">loading…</div>
           )}
           {error && (
             <div className="text-red-400 text-xs uppercase">
@@ -65,7 +65,7 @@ function TickerSection({
             </div>
           )}
           {!loading && !error && news.length === 0 && (
-            <div className="text-green-500/60 text-xs uppercase">no news</div>
+            <div className="text-b7-green-muted text-xs uppercase">no news</div>
           )}
           <div className="grid sm:grid-cols-2 gap-2">
             {news.map((n, i) => (

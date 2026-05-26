@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import { ClipboardCopy } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ScreenerResultRow } from "@/lib/api";
 
@@ -177,13 +178,37 @@ export function ScreenerResults({ results, loading = false }: Props) {
   if (results.length === 0) {
     return (
       <div className="text-b7-green-muted text-xs uppercase border border-b7-green-border p-3">
-        {`> NO RESULTS — run the screener to populate`}
+        {`> NO RESULTS — screener runs every 4h. Click [ RUN ON WATCHLIST ] for immediate results.`}
       </div>
     );
   }
 
+  const [copied, setCopied] = useState(false);
+
+  function copySymbols() {
+    const syms = sorted.map((r) => r.ticker).join(", ");
+    navigator.clipboard.writeText(syms).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
   return (
     <div className="border border-b7-green-border overflow-x-auto">
+      <div className="flex items-center justify-between px-3 py-1 border-b border-b7-green-border/40 bg-black">
+        <span className="text-b7-green-muted text-xs uppercase">
+          {`> ${sorted.length} leaders`}
+        </span>
+        <button
+          type="button"
+          onClick={copySymbols}
+          title="Copy all ticker symbols to clipboard"
+          className="inline-flex items-center gap-1 text-b7-green-muted hover:text-b7-green text-xs uppercase transition"
+        >
+          <ClipboardCopy size={12} aria-hidden="true" />
+          {copied ? "copied!" : "copy symbols"}
+        </button>
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="sticky top-0 bg-black border-b border-b7-green-border">
