@@ -8,6 +8,7 @@ Sections:
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -94,7 +95,7 @@ def build_digest(
         (subject, html_body, text_body)
     """
     now = datetime.now(timezone.utc)
-    date_str = now.strftime("%a, %b %-d" if now.platform != "win32" else "%a, %b %#d")
+    date_str = now.strftime("%a, %b %-d" if sys.platform != "win32" else "%a, %b %#d")
 
     # Build subject
     subject = f"Best7DaysMula {digest_frequency.capitalize()} Digest — {date_str}"

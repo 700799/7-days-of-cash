@@ -248,13 +248,30 @@ export function ScreenerResults({ results, loading = false }: Props) {
             </tr>
           </thead>
           <tbody>
-            {sorted.map((r) => (
+            {sorted.map((r, idx) => (
               <tr
                 key={r.ticker}
-                className="border-b border-green-500/10 even:bg-green-950/10 hover:bg-green-500/5"
+                className={clsx(
+                  "border-b border-green-500/10 hover:bg-b7-green/5 transition-colors",
+                  idx === 0 && "bg-b7-green/10 border-b7-green-border/50",
+                  idx === 1 && "bg-b7-green/5",
+                  idx === 2 && "bg-b7-green/[0.03]",
+                  idx > 2 && "even:bg-green-950/10",
+                )}
               >
-                <td className="py-2 px-3 uppercase text-b7-green-dim">
-                  {r.ticker}
+                <td className="py-2 px-3 uppercase font-bold">
+                  <a
+                    href={`https://finance.yahoo.com/quote/${r.ticker}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`View ${r.ticker} on Yahoo Finance`}
+                    className={clsx(
+                      "hover:underline",
+                      idx === 0 ? "text-b7-green" : "text-b7-green-dim",
+                    )}
+                  >
+                    {idx === 0 ? `★ ${r.ticker}` : r.ticker}
+                  </a>
                 </td>
                 <td className="py-2 px-3 text-right">{fmtNum(r.price)}</td>
                 <td

@@ -110,3 +110,47 @@ def get_cached_screener(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch cached results: {e}")
+
+
+@router.get("/top")
+def get_top_screener(
+    n: int = 10,
+    _user: Optional[User] = Depends(get_current_user_optional),
+) -> list:
+    """Return the top N leaders from cached pre-computed results.
+
+    Returns a minimal list of dicts: {ticker, ret_7d, score, best_strategy}.
+    Useful for integrations, dashboards, and embedding in digest emails.
+    """
+    import json
+    from ..db import get_conn
+
+    if n < 1 or n > 100:
+        raise HTTPException(status_code=400, detail="n must be between 1 and 100")
+
+    try:
+        with get_conn() as c:
+            with c.cursor() as cur:
+                cur.execute(
+                    """SELECT payload FROM screener_results
+                       ORDER BY ran_at DESC LIMIT 1"""
+                )
+                row = cur.fetchone()
+        if not row:
+            return []
+        payload = json.loads(row[0])
+        results = payload.get("results", [])
+        return [
+            {
+                "ticker": r.get("ticker"),
+                "ret_7d": r.get("ret_7d"),
+                "score": r.get("score") or r.get("composite_score"),
+                "best_strategy": r.get("best_strategy"),
+                "vs_voo": r.get("vs_voo"),
+            }
+            for r in results[:n]
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch top results: {e}")
