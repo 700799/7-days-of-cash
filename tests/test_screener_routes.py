@@ -106,10 +106,11 @@ def _fake_pipeline_result():
 # ---------------------------------------------------------------------------
 
 class TestRunScreener:
-    def test_run_requires_pro_unauthenticated_gets_401(self, client):
-        """Unauthenticated users cannot use the live screener."""
-        resp = client.post("/api/screener/run", json={"tickers": ["AAPL"]})
-        assert resp.status_code in (401, 403)
+    def test_run_unauthenticated_is_allowed(self, client):
+        """Live screener is open to all (no Pro gate)."""
+        with patch("api.routes.screener._run_pipeline", return_value=_fake_pipeline_result()):
+            resp = client.post("/api/screener/run", json={"tickers": ["AAPL"]})
+        assert resp.status_code == 200
 
     def test_run_accepts_small_ticker_list(self, pro_client):
         tickers = ["AAPL", "NVDA", "MSFT"]
@@ -270,9 +271,12 @@ class TestExportScreener:
         }
         return (ran_at, json.dumps(payload))
 
-    def test_export_requires_pro(self, client):
-        resp = client.get("/api/screener/export")
-        assert resp.status_code in (401, 403)
+    def test_export_open_to_all(self, client):
+        """Export is open to all users (no Pro gate)."""
+        row = self._make_db_row()
+        with patch(self.CONN_PATCH, _make_mock_conn(row=row)):
+            resp = client.get("/api/screener/export")
+        assert resp.status_code == 200
 
     def test_export_returns_csv(self, pro_client):
         row = self._make_db_row()
@@ -337,9 +341,12 @@ class TestScreenerHistory:
 
         return _get_conn
 
-    def test_history_requires_pro(self, client):
-        resp = client.get("/api/screener/history")
-        assert resp.status_code in (401, 403)
+    def test_history_open_to_all(self, client):
+        """History is open to all users (no Pro gate)."""
+        rows = self._make_history_rows(2)
+        with patch(self.CONN_PATCH, self._make_multi_conn(rows)):
+            resp = client.get("/api/screener/history")
+        assert resp.status_code == 200
 
     def test_history_returns_list(self, pro_client):
         rows = self._make_history_rows(3)

@@ -12,7 +12,6 @@ from ..db import get_conn
 from ..defaults import DEFAULT_TICKERS
 from ..models import Ticker, TickerCreate, TickerUpdate, User
 from ..security import WRITE_LIMIT, limiter
-from ..tier import FREE_WATCHLIST_LIMIT, get_user_tier
 
 router = APIRouter(prefix="/api/tickers", tags=["tickers"])
 
@@ -97,23 +96,6 @@ def add_ticker(
             existing = cur.fetchone()
             if existing is not None:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already in watchlist")
-
-            # Enforce free-tier watchlist limit
-            tier = get_user_tier(user.id)
-            if tier == "free":
-                cur.execute(
-                    "SELECT COUNT(*) FROM watchlists WHERE user_id=%s",
-                    [user.id],
-                )
-                count_row = cur.fetchone()
-                if count_row and count_row[0] >= FREE_WATCHLIST_LIMIT:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail=(
-                            f"Free plan limited to {FREE_WATCHLIST_LIMIT} tickers. "
-                            "Upgrade to Pro for unlimited watchlist slots."
-                        ),
-                    )
 
             cur.execute(
                 "INSERT INTO watchlists(user_id, symbol, note) VALUES (%s, %s, %s)",

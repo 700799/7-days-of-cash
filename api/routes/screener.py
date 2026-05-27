@@ -14,7 +14,6 @@ from ..auth import get_current_user_optional
 from ..db import get_conn
 from ..models import ScreenerRequest, ScreenerResponse, User
 from ..security import EXPENSIVE_LIMIT, limiter
-from ..tier import require_pro
 
 router = APIRouter(prefix="/api/screener", tags=["screener"])
 
@@ -69,9 +68,9 @@ def _run_pipeline(
 def run_screener(
     request: Request,
     payload: ScreenerRequest,
-    user: User = Depends(require_pro),
+    user: User = Depends(get_current_user_optional),
 ) -> ScreenerResponse:
-    """Run live screener (Pro only, ≤ 50 tickers). Free users see /cached."""
+    """Run live screener on a custom ticker list (≤ 50 tickers)."""
     if payload.tickers and len(payload.tickers) > MAX_LIVE_TICKERS:
         raise HTTPException(
             status_code=413,
@@ -160,7 +159,7 @@ def get_top_screener(
 
 @router.get("/export")
 def export_screener_csv(
-    user: User = Depends(require_pro),
+    user: User = Depends(get_current_user_optional),
 ) -> StreamingResponse:
     """Download screener results as CSV (Pro only).
 
@@ -219,7 +218,7 @@ def export_screener_csv(
 @router.get("/history")
 def screener_history(
     days: int = 7,
-    user: User = Depends(require_pro),
+    _user: Optional[User] = Depends(get_current_user_optional),
 ) -> list:
     """Return historical screener runs for the last N days (Pro only, max 30).
 

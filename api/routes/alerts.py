@@ -16,7 +16,7 @@ from pydantic import BaseModel, field_validator
 from ..auth import get_current_user
 from ..db import get_conn
 from ..models import User
-from ..tier import PRO_ALERT_LIMIT, require_pro
+from ..tier import PRO_ALERT_LIMIT
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 log = logging.getLogger(__name__)
@@ -72,7 +72,7 @@ def _list_alerts_for_user(user_id: str) -> List[Dict[str, Any]]:
 
 
 @router.get("")
-def list_alerts(user: User = Depends(require_pro)) -> List[Dict[str, Any]]:
+def list_alerts(user: User = Depends(get_current_user)) -> List[Dict[str, Any]]:
     """Return all price alerts for the authenticated Pro user."""
     return _list_alerts_for_user(user.id)
 
@@ -80,7 +80,7 @@ def list_alerts(user: User = Depends(require_pro)) -> List[Dict[str, Any]]:
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_alert(
     payload: AlertCreate,
-    user: User = Depends(require_pro),
+    user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Create a price alert. Max 10 active alerts per Pro user."""
     existing = _list_alerts_for_user(user.id)
@@ -120,7 +120,7 @@ def create_alert(
 
 
 @router.delete("/{alert_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_alert(alert_id: int, user: User = Depends(require_pro)) -> None:
+def delete_alert(alert_id: int, user: User = Depends(get_current_user)) -> None:
     """Delete a price alert (must belong to authenticated user)."""
     with get_conn() as c:
         with c.cursor() as cur:

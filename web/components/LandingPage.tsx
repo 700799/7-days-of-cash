@@ -1,8 +1,6 @@
 "use client";
 
 import { useAuth } from "./AuthProvider";
-import { createCheckoutSession } from "@/lib/api";
-import { useState } from "react";
 
 const DEMO_TICKERS = [
   { ticker: "NVDA", ret_7d: "+14.2%", score: "94.1", strategy: "MOMENTUM" },
@@ -12,39 +10,41 @@ const DEMO_TICKERS = [
   { ticker: "RKLB", ret_7d: "+8.6%",  score: "82.4", strategy: "REL. STRENGTH" },
 ];
 
-const FREE_FEATURES = [
-  "Cached full S&P 500 screener (refreshed every 4h)",
-  "5-ticker watchlist",
-  "Daily email digest",
-  "Market regime + benchmark panel",
-  "Trending news feed",
-  "Per-ticker mover analysis",
-];
-
-const PRO_FEATURES = [
-  "Everything in Free",
-  "Unlimited watchlist tickers",
-  "Live screener on your watchlist",
-  "Weekly digest + custom digest email",
-  "Price alerts (up to 10)",
-  "CSV export of screener results",
-  "Custom screener filter UI",
-  "30-day screener history archive",
+const FEATURES = [
+  {
+    icon: "⬡",
+    title: "5 Scoring Agents",
+    body: "Momentum, breakout, volume surge, relative strength, and mean-reversion each vote independently. The composite score ranks every ticker.",
+  },
+  {
+    icon: "◈",
+    title: "700+ Tickers",
+    body: "Full S&P 500 plus extended market. Screened against VOO, VXF, and VTIAX benchmarks so you know the true alpha — not just raw return.",
+  },
+  {
+    icon: "◉",
+    title: "4-Hour Refresh",
+    body: "Pre-computed every 4 hours. Results load in < 100ms from cache — no waiting, no rate limits.",
+  },
+  {
+    icon: "◎",
+    title: "Email Digest",
+    body: "Daily or weekly digest of your watchlist movers and screener leaders, delivered straight to your inbox.",
+  },
+  {
+    icon: "▣",
+    title: "Price Alerts",
+    body: "Set price alerts on any ticker. Get notified by email when a stock crosses your target.",
+  },
+  {
+    icon: "⊞",
+    title: "CSV Export",
+    body: "Download the full screener results as a CSV for import into Excel, Google Sheets, or your own analysis.",
+  },
 ];
 
 export function LandingPage() {
   const { login } = useAuth();
-  const [upgrading, setUpgrading] = useState(false);
-
-  async function handleUpgrade() {
-    setUpgrading(true);
-    try {
-      const { url } = await createCheckoutSession();
-      window.location.href = url;
-    } catch {
-      setUpgrading(false);
-    }
-  }
 
   return (
     <div className="min-h-screen bg-black text-b7-green font-mono">
@@ -60,23 +60,15 @@ export function LandingPage() {
         <p className="text-b7-green-dim text-sm sm:text-base max-w-2xl mx-auto mb-8">
           Multi-agent AI scores 700+ tickers for momentum, breakout, volume surge,
           relative strength, and mean-reversion. Refreshed every 4 hours.
-          Not financial advice.
+          Free to use. Not financial advice.
         </p>
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          <button
-            type="button"
-            onClick={login}
-            className="px-6 py-2 border border-b7-green text-b7-green hover:bg-b7-green hover:text-black transition text-sm uppercase tracking-wide"
-          >
-            {`[ > SIGN IN FREE ]`}
-          </button>
-          <a
-            href="#pricing"
-            className="px-6 py-2 border border-b7-green-border text-b7-green-muted hover:text-b7-green transition text-sm uppercase tracking-wide"
-          >
-            See Pro plan ↓
-          </a>
-        </div>
+        <button
+          type="button"
+          onClick={login}
+          className="px-8 py-3 border border-b7-green text-b7-green hover:bg-b7-green hover:text-black transition text-sm uppercase tracking-wide font-bold"
+        >
+          {`[ > Sign in free with Google ]`}
+        </button>
       </div>
 
       {/* ── Live demo snapshot ──────────────────────────────────────── */}
@@ -84,20 +76,15 @@ export function LandingPage() {
         <div className="border border-b7-green-border overflow-x-auto">
           <div className="px-3 py-1 border-b border-b7-green-border/40 bg-black flex items-center justify-between">
             <span className="text-b7-green-muted text-xs uppercase">
-              {`> today's top picks (sample — sign in for live data)`}
+              {`> sample leaders — sign in to see today's real picks`}
             </span>
-            <span className="text-b7-green-muted text-xs">◉ CACHED · 4h refresh</span>
+            <span className="text-b7-green-muted text-xs">◉ refreshed every 4h</span>
           </div>
           <table className="w-full text-xs">
             <thead className="border-b border-b7-green-border">
               <tr>
-                {["TICKER", "7D%", "SCORE", "BEST STRAT"].map((h) => (
-                  <th
-                    key={h}
-                    className="py-2 px-3 uppercase text-left text-b7-green"
-                  >
-                    {h}
-                  </th>
+                {["TICKER", "7D %", "SCORE", "BEST STRAT"].map((h) => (
+                  <th key={h} className="py-2 px-3 uppercase text-left text-b7-green">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -117,9 +104,6 @@ export function LandingPage() {
               ))}
             </tbody>
           </table>
-          <div className="px-3 py-2 text-b7-green-muted text-xs border-t border-b7-green-border/40">
-            {`> demo data only — sign in to see today's real-time leaders`}
-          </div>
         </div>
       </div>
 
@@ -127,27 +111,11 @@ export function LandingPage() {
       <div className="max-w-4xl mx-auto px-4 pb-16">
         <div className="text-center mb-8">
           <span className="text-b7-green-muted text-xs uppercase tracking-widest">
-            {`> how it works`}
+            {`> everything included, free`}
           </span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            {
-              icon: "⬡",
-              title: "5 Scoring Agents",
-              body: "Momentum, breakout, volume surge, relative strength, and mean-reversion each vote independently. The composite score ranks every ticker.",
-            },
-            {
-              icon: "◈",
-              title: "700+ Tickers",
-              body: "Full S&P 500 plus extended market. Screened against VOO, VXF, and VTIAX benchmarks so you know the true alpha — not just raw return.",
-            },
-            {
-              icon: "◉",
-              title: "4-Hour Refresh",
-              body: "Pre-computed by Vercel Cron every 4 hours. Results load in < 100ms from Postgres cache — no waiting, no rate limits, no yfinance hammering.",
-            },
-          ].map((f) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {FEATURES.map((f) => (
             <div key={f.title} className="border border-b7-green-border p-4 space-y-2">
               <div className="text-b7-green text-xl">{f.icon}</div>
               <div className="text-b7-green text-sm uppercase font-bold">{f.title}</div>
@@ -157,85 +125,31 @@ export function LandingPage() {
         </div>
       </div>
 
-      {/* ── Pricing ─────────────────────────────────────────────────── */}
-      <div id="pricing" className="max-w-4xl mx-auto px-4 pb-16">
-        <div className="text-center mb-8">
-          <span className="text-b7-green-muted text-xs uppercase tracking-widest">
-            {`> pricing`}
-          </span>
-          <p className="text-b7-green-dim text-xs mt-2">
-            No credit card required for free tier. Cancel anytime.
+      {/* ── Bottom CTA ──────────────────────────────────────────────── */}
+      <div className="max-w-4xl mx-auto px-4 pb-16 text-center">
+        <div className="border border-b7-green-border p-8 space-y-4">
+          <div className="text-b7-green text-sm uppercase">
+            {`> ready to find the leaders?`}
+          </div>
+          <button
+            type="button"
+            onClick={login}
+            className="px-8 py-3 border border-b7-green bg-b7-green text-black hover:bg-b7-green/90 transition text-sm uppercase font-bold"
+          >
+            Get started free →
+          </button>
+          <p className="text-b7-green-muted text-xs">
+            Sign in with Google. No credit card. No setup.
           </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Free card */}
-          <div className="border border-b7-green-border p-5 space-y-4">
-            <div>
-              <div className="text-b7-green text-sm uppercase font-bold">Free</div>
-              <div className="text-b7-green text-2xl font-bold mt-1">$0<span className="text-b7-green-muted text-xs">/mo</span></div>
-            </div>
-            <ul className="space-y-2">
-              {FREE_FEATURES.map((f) => (
-                <li key={f} className="text-xs text-b7-green-dim flex gap-2">
-                  <span className="text-b7-green flex-shrink-0">✓</span>
-                  {f}
-                </li>
-              ))}
-            </ul>
-            <button
-              type="button"
-              onClick={login}
-              className="w-full py-2 border border-b7-green-border text-b7-green-muted hover:text-b7-green transition text-xs uppercase"
-            >
-              Get started free →
-            </button>
-          </div>
-
-          {/* Pro card */}
-          <div className="border border-b7-green bg-b7-green/5 p-5 space-y-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-b7-green text-sm uppercase font-bold">Pro</span>
-                <span className="text-[10px] bg-b7-green text-black px-1.5 py-0.5 uppercase">
-                  Recommended
-                </span>
-              </div>
-              <div className="text-b7-green text-2xl font-bold mt-1">$9<span className="text-b7-green-muted text-xs">/mo</span></div>
-            </div>
-            <ul className="space-y-2">
-              {PRO_FEATURES.map((f) => (
-                <li key={f} className="text-xs text-b7-green-dim flex gap-2">
-                  <span className="text-b7-green flex-shrink-0">★</span>
-                  {f}
-                </li>
-              ))}
-            </ul>
-            <button
-              type="button"
-              onClick={handleUpgrade}
-              disabled={upgrading}
-              className="w-full py-2 border border-b7-green bg-b7-green text-black hover:bg-b7-green/90 transition text-xs uppercase font-bold disabled:opacity-60"
-            >
-              {upgrading ? "Redirecting to Stripe…" : "Upgrade to Pro →"}
-            </button>
-          </div>
         </div>
       </div>
 
       {/* ── Footer ──────────────────────────────────────────────────── */}
       <footer className="border-t border-b7-green-border/40 max-w-4xl mx-auto px-4 py-8 text-center">
         <p className="text-b7-green-muted text-xs">
-          Best7DaysMula is not financial advice. Past screener performance does not
-          guarantee future results. Always do your own research.
+          Not financial advice. Past screener performance does not guarantee future results.
+          Always do your own research.
         </p>
-        <div className="flex items-center justify-center gap-4 mt-4 text-xs text-b7-green-muted">
-          <a href="/privacy" className="hover:text-b7-green transition">Privacy</a>
-          <span>·</span>
-          <a href="/terms" className="hover:text-b7-green transition">Terms</a>
-          <span>·</span>
-          <a href="mailto:support@best7daysmula.com" className="hover:text-b7-green transition">Support</a>
-        </div>
       </footer>
     </div>
   );

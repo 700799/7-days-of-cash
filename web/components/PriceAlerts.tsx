@@ -3,36 +3,16 @@
 import { useState } from "react";
 import { Trash2, Bell } from "lucide-react";
 import { createAlert, deleteAlert } from "@/lib/api";
-import { useAlerts, useBillingStatus } from "@/lib/hooks";
+import { useAlerts } from "@/lib/hooks";
 
 export function PriceAlerts() {
-  const { isPro, loading: tierLoading } = useBillingStatus(true);
-  const { alerts, loading, mutate } = useAlerts(isPro);
+  const { alerts, loading, mutate } = useAlerts(true);
 
   const [symbol, setSymbol] = useState("");
   const [condition, setCondition] = useState<"above" | "below">("above");
   const [target, setTarget] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (tierLoading) return null;
-
-  if (!isPro) {
-    return (
-      <section className="border border-b7-green-border p-3">
-        <h2 className="text-b7-green uppercase text-sm mb-2">{`> PRICE ALERTS`}</h2>
-        <p className="text-b7-green-muted text-xs">
-          {`> Pro feature — upgrade to set price alerts and get email notifications.`}
-        </p>
-        <a
-          href="/#pricing"
-          className="inline-block mt-2 text-xs text-b7-green border border-b7-green-border px-3 py-1 hover:bg-b7-green/10 transition uppercase"
-        >
-          Upgrade to Pro →
-        </a>
-      </section>
-    );
-  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();

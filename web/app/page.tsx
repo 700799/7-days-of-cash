@@ -6,7 +6,6 @@ import { AuthButton } from "@/components/AuthButton";
 import { useAuth } from "@/components/AuthProvider";
 import { Banner } from "@/components/Banner";
 import { BenchmarkBar } from "@/components/BenchmarkBar";
-import { BillingBadge } from "@/components/BillingBadge";
 import { EmailDigestSettings } from "@/components/EmailDigestSettings";
 import { LandingPage } from "@/components/LandingPage";
 import { MoversList } from "@/components/MoversList";
@@ -18,19 +17,13 @@ import { TickerForm } from "@/components/TickerForm";
 import { TickerPills } from "@/components/TickerPills";
 import { TrendingNews } from "@/components/TrendingNews";
 import { runScreener, screenerExportUrl, type ScreenerPayload } from "@/lib/api";
-import {
-  useBillingStatus,
-  useCachedScreener,
-  useDefaults,
-  useTickers,
-} from "@/lib/hooks";
+import { useCachedScreener, useDefaults, useTickers } from "@/lib/hooks";
 
 export default function HomePage() {
   const { user, loading: authLoading } = useAuth();
   const signedIn = !!user;
   const { tickers } = useTickers(signedIn);
   const { defaults } = useDefaults();
-  const { isPro } = useBillingStatus(signedIn);
 
   // Pre-computed results (loads instantly from Postgres cache, refreshed every 4h by cron)
   const { payload: cached, loading: cachedLoading } = useCachedScreener();
@@ -72,11 +65,7 @@ export default function HomePage() {
       );
       setLivePayload(res);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "screener failed";
-      // Surface upgrade prompt if user hit the Pro gate
-      setRunError(
-        msg.includes("Pro subscription") ? "Live screener requires Pro — upgrade at /#pricing" : msg
-      );
+      setRunError(err instanceof Error ? err.message : "screener failed");
     } finally {
       setRunning(false);
     }
@@ -110,8 +99,7 @@ export default function HomePage() {
         Refreshed every 4 hours.
       </p>
 
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-        <BillingBadge />
+      <div className="absolute top-3 right-3 z-10">
         <AuthButton />
       </div>
 
@@ -129,13 +117,6 @@ export default function HomePage() {
             signedIn={signedIn}
             defaults={defaults}
           />
-          {!isPro && tickers.length >= 5 && (
-            <p className="text-b7-green-muted text-xs">
-              {`> Free plan: 5-ticker limit reached. `}
-              <a href="/#pricing" className="text-b7-green hover:underline">Upgrade to Pro</a>
-              {` for unlimited slots.`}
-            </p>
-          )}
         </section>
 
         {/* Screener controls row */}
@@ -145,7 +126,7 @@ export default function HomePage() {
             onClick={handleRun}
             disabled={running}
             aria-busy={running}
-            title={isPro ? "Run live screener on your watchlist" : "Live screener requires Pro"}
+            title="Run live screener on your watchlist"
             className="inline-flex items-center gap-2 px-3 py-1 border border-b7-green-border text-b7-green hover:bg-b7-green/10 hover:text-b7-green-dim transition rounded-sm uppercase text-xs disabled:opacity-50"
           >
             {running ? (
@@ -156,9 +137,7 @@ export default function HomePage() {
             ) : (
               <>
                 <Play size={14} aria-hidden="true" />
-                <span>
-                  {isPro ? "[ > RUN ON WATCHLIST ]" : "[ > RUN — PRO ]"}
-                </span>
+                <span>[ &gt; RUN ON WATCHLIST ]</span>
               </>
             )}
           </button>
@@ -174,8 +153,8 @@ export default function HomePage() {
             </button>
           )}
 
-          {/* CSV export — Pro only */}
-          {isPro && payload && (
+          {/* CSV export */}
+          {payload && (
             <a
               href={screenerExportUrl()}
               download
