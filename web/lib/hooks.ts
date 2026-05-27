@@ -3,6 +3,8 @@
 import useSWR from "swr";
 import {
   getCachedScreener,
+  getAlerts,
+  getBillingStatus,
   getMarketNews,
   getMe,
   getMover,
@@ -12,9 +14,11 @@ import {
   getTickerNews,
   getTrendingNews,
   listTickers,
+  type BillingStatus,
   type Mover,
   type NewsItem,
   type Preferences,
+  type PriceAlert,
   type ScreenerPayload,
   type Ticker,
   type User,
@@ -137,4 +141,34 @@ export function usePreferences(enabled: boolean = true) {
     { ...BASE_SWR, shouldRetryOnError: false },
   );
   return { preferences: data ?? null, error, loading: isLoading, mutate };
+}
+
+export function useBillingStatus(enabled: boolean = true) {
+  const { data, error, isLoading, mutate } = useSWR<BillingStatus>(
+    enabled ? "billing:status" : null,
+    () => getBillingStatus(),
+    {
+      ...BASE_SWR,
+      // Billing status doesn't change often; check once per hour
+      refreshInterval: 60 * 60 * 1000,
+      shouldRetryOnError: false,
+      onErrorRetry: (err, _key, _config, revalidate, { retryCount }) => {
+        if (err?.status === 401) return;
+        if (retryCount >= 2) return;
+        setTimeout(() => revalidate({ retryCount }), 30_000);
+      },
+    },
+  );
+  const plan = data?.plan ?? "free";
+  const isPro = plan === "pro";
+  return { status: data ?? null, plan, isPro, error, loading: isLoading, mutate };
+}
+
+export function useAlerts(enabled: boolean = true) {
+  const { data, error, isLoading, mutate } = useSWR<PriceAlert[]>(
+    enabled ? "alerts:list" : null,
+    () => getAlerts(),
+    { ...BASE_SWR, shouldRetryOnError: false },
+  );
+  return { alerts: data ?? [], error, loading: isLoading, mutate };
 }

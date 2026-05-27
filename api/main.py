@@ -17,7 +17,9 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .config import get_settings
 from .db import reset_pool
+from .routes import alerts as alerts_routes
 from .routes import auth as auth_routes
+from .routes import billing as billing_routes
 from .routes import cron as cron_routes
 from .routes import movers as movers_routes
 from .routes import news as news_routes
@@ -76,6 +78,8 @@ def create_app() -> FastAPI:
     app.include_router(movers_routes.router)
     app.include_router(preferences_routes.router)
     app.include_router(cron_routes.router)
+    app.include_router(billing_routes.router)
+    app.include_router(alerts_routes.router)
 
     @app.get("/api/health")
     def health():

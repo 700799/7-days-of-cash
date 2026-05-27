@@ -17,6 +17,72 @@ router = APIRouter(prefix="/api/cron", tags=["cron"])
 log = logging.getLogger(__name__)
 
 
+def _check_price_alerts(screener_payload: dict) -> None:
+    """Check all untriggered price alerts against latest screener prices.
+
+    Called from cron_refresh after a successful screener run. For each
+    untriggered alert, look up the ticker's current price in screener_payload.
+    If the condition is met, send an email to the user and mark triggered.
+    """
+    results = screener_payload.get("results", [])
+    if not results:
+        return
+
+    # Build price lookup from screener results
+    price_map: dict = {r.get("ticker"): r.get("price") for r in results if r.get("ticker")}
+
+    from ..db import get_conn
+    from ..email_sender import send_email
+
+    with get_conn() as c:
+        with c.cursor() as cur:
+            cur.execute(
+                """SELECT pa.id, pa.user_id, pa.symbol, pa.condition, pa.target,
+                          u.email
+                   FROM price_alerts pa
+                   JOIN users u ON pa.user_id = u.id
+                   WHERE pa.triggered = FALSE"""
+            )
+            alerts = cur.fetchall()
+
+    for alert_id, user_id, symbol, condition, target, email in alerts:
+        price = price_map.get(symbol)
+        if price is None:
+            continue  # symbol not in latest screener run
+
+        target_f = float(target)
+        triggered = (condition == "above" and price >= target_f) or \
+                    (condition == "below" and price <= target_f)
+
+        if not triggered:
+            continue
+
+        direction = "▲" if condition == "above" else "▼"
+        subject = f"[Best7DaysMula] {symbol} {direction} ${target_f:.2f} alert triggered"
+        html = (
+            f'<!DOCTYPE html><html><body style="background:#000;color:#22ff88;font-family:monospace;">'
+            f'<h2>{symbol} price alert triggered</h2>'
+            f'<p>Current price: <strong>${price:.2f}</strong></p>'
+            f'<p>Your alert: {condition} ${target_f:.2f}</p>'
+            f'<p><a href="https://finance.yahoo.com/quote/{symbol}" style="color:#22ff88;">'
+            f'View on Yahoo Finance</a></p>'
+            f'</body></html>'
+        )
+        text = f"{symbol} {direction} ${target_f:.2f} — current price ${price:.2f}"
+
+        try:
+            send_email(email, subject, html, text)
+            with get_conn() as c:
+                with c.cursor() as cur:
+                    cur.execute(
+                        "UPDATE price_alerts SET triggered = TRUE WHERE id = %s",
+                        [alert_id],
+                    )
+            log.info("Alert %s triggered for user %s: %s %s $%s", alert_id, user_id, symbol, condition, target_f)
+        except Exception as e:
+            log.warning("Failed to send alert %s: %s", alert_id, e)
+
+
 @router.post("/refresh")
 def cron_refresh(authorization: Optional[str] = Header(default=None)):
     """Every 4 hours: warm the news cache and precompute screener results.
@@ -58,6 +124,12 @@ def cron_refresh(authorization: Optional[str] = Header(default=None)):
         except Exception as e:
             log.exception("Screener precompute failed: %s", e)
             error_msg = str(e)
+
+        # Check price alerts against latest screener results
+        try:
+            _check_price_alerts(screener_payload if screener_ok else {})
+        except Exception as e:
+            log.warning("Alert check failed: %s", e)
 
     except Exception as e:
         # Don't 500 the cron — Vercel will keep retrying and burn invocations.

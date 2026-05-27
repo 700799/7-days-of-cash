@@ -1,14 +1,20 @@
 """Screener route — runs the multi-agent pipeline on demand."""
 from __future__ import annotations
 
+import csv
+import io
+import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from ..auth import get_current_user_optional
+from ..db import get_conn
 from ..models import ScreenerRequest, ScreenerResponse, User
 from ..security import EXPENSIVE_LIMIT, limiter
+from ..tier import require_pro
 
 router = APIRouter(prefix="/api/screener", tags=["screener"])
 
@@ -63,8 +69,9 @@ def _run_pipeline(
 def run_screener(
     request: Request,
     payload: ScreenerRequest,
-    _user: Optional[User] = Depends(get_current_user_optional),
+    user: User = Depends(require_pro),
 ) -> ScreenerResponse:
+    """Run live screener (Pro only, ≤ 50 tickers). Free users see /cached."""
     if payload.tickers and len(payload.tickers) > MAX_LIVE_TICKERS:
         raise HTTPException(
             status_code=413,
@@ -83,11 +90,9 @@ def get_cached_screener(
 ) -> ScreenerResponse:
     """Return latest pre-computed screener results (updated every 4 hours via cron).
 
-    Returns instantly from Postgres cache. Never hits yfinance live.
+    Available to all users (Free + Pro). Returns instantly from Postgres cache.
+    Never hits yfinance live.
     """
-    import json
-    from ..db import get_conn
-
     try:
         with get_conn() as c:
             with c.cursor() as cur:
@@ -122,9 +127,6 @@ def get_top_screener(
     Returns a minimal list of dicts: {ticker, ret_7d, score, best_strategy}.
     Useful for integrations, dashboards, and embedding in digest emails.
     """
-    import json
-    from ..db import get_conn
-
     if n < 1 or n > 100:
         raise HTTPException(status_code=400, detail="n must be between 1 and 100")
 
@@ -154,3 +156,135 @@ def get_top_screener(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch top results: {e}")
+
+
+@router.get("/export")
+def export_screener_csv(
+    user: User = Depends(require_pro),
+) -> StreamingResponse:
+    """Download screener results as CSV (Pro only).
+
+    Returns the latest cached screener run as a downloadable CSV file with
+    all scored columns. Suitable for import into Excel / Google Sheets.
+    """
+    try:
+        with get_conn() as c:
+            with c.cursor() as cur:
+                cur.execute(
+                    """SELECT ran_at, payload FROM screener_results
+                       ORDER BY ran_at DESC LIMIT 1"""
+                )
+                row = cur.fetchone()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DB error: {e}")
+
+    if not row:
+        raise HTTPException(status_code=404, detail="No screener results to export yet.")
+
+    ran_at, payload_str = row
+    payload = json.loads(payload_str)
+    results = payload.get("results", [])
+
+    if not results:
+        raise HTTPException(status_code=404, detail="No results in latest screener run.")
+
+    # Build CSV in memory
+    output = io.StringIO()
+    fieldnames = [
+        "ticker", "price", "ret_7d", "change_7d", "score", "composite_score",
+        "momentum", "breakout", "volume", "rs", "mean_reversion",
+        "best_strategy", "vs_voo",
+    ]
+    # Include any extra columns present in the data
+    extra_keys = sorted(
+        k for k in results[0].keys()
+        if k not in fieldnames and not k.startswith("_")
+    )
+    all_fields = fieldnames + extra_keys
+
+    writer = csv.DictWriter(output, fieldnames=all_fields, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(results)
+
+    filename_date = ran_at.strftime("%Y%m%d") if ran_at else "latest"
+    filename = f"best7daysmula_screener_{filename_date}.csv"
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/history")
+def screener_history(
+    days: int = 7,
+    user: User = Depends(require_pro),
+) -> list:
+    """Return historical screener runs for the last N days (Pro only, max 30).
+
+    Each entry: {id, ran_at, results_count, top_5_tickers, error}.
+    Useful for tracking which stocks the screener consistently identifies.
+    """
+    days = max(1, min(days, 30))
+
+    try:
+        with get_conn() as c:
+            with c.cursor() as cur:
+                cur.execute(
+                    """SELECT id, ran_at, payload
+                       FROM screener_results
+                       WHERE ran_at >= now() - (%s || ' days')::interval
+                       ORDER BY ran_at DESC""",
+                    [str(days)],
+                )
+                rows = cur.fetchall()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DB error: {e}")
+
+    history = []
+    for row_id, ran_at, payload_data in rows:
+        payload = json.loads(payload_data) if isinstance(payload_data, str) else payload_data
+        results = payload.get("results", [])
+        top5 = [r.get("ticker") for r in results[:5]]
+        history.append({
+            "id": row_id,
+            "ran_at": ran_at.isoformat() if ran_at else None,
+            "results_count": len(results),
+            "top_5_tickers": top5,
+            "error": payload.get("error"),
+        })
+
+    return history
+
+
+@router.get("/share/{result_id}")
+def get_shared_screener(result_id: int) -> Dict[str, Any]:
+    """Public read of a specific screener run by ID (no auth required).
+
+    Powers shareable result links: /results/{id}
+    """
+    try:
+        with get_conn() as c:
+            with c.cursor() as cur:
+                cur.execute(
+                    "SELECT ran_at, payload FROM screener_results WHERE id = %s",
+                    [result_id],
+                )
+                row = cur.fetchone()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DB error: {e}")
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Screener result not found.")
+
+    ran_at, payload_data = row
+    payload = json.loads(payload_data) if isinstance(payload_data, str) else payload_data
+    results = payload.get("results", [])
+
+    return {
+        "id": result_id,
+        "ran_at": ran_at.isoformat() if ran_at else None,
+        "results_count": len(results),
+        "top_picks": results[:10],
+    }

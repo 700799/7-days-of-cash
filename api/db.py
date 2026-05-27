@@ -88,6 +88,27 @@ CREATE TABLE IF NOT EXISTS symbol_validation_cache (
     valid      BOOLEAN NOT NULL,
     fetched_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+    user_id                TEXT PRIMARY KEY,
+    stripe_customer_id     TEXT,
+    stripe_subscription_id TEXT,
+    plan                   TEXT NOT NULL DEFAULT 'free',
+    status                 TEXT NOT NULL DEFAULT 'active',
+    current_period_end     TIMESTAMPTZ,
+    updated_at             TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS price_alerts (
+    id         BIGSERIAL PRIMARY KEY,
+    user_id    TEXT NOT NULL,
+    symbol     TEXT NOT NULL,
+    condition  TEXT NOT NULL,
+    target     NUMERIC NOT NULL,
+    triggered  BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (user_id, symbol, condition, target)
+);
 """
 
 

@@ -1,32 +1,41 @@
 "use client";
 
-import { Loader2, Play, RefreshCw } from "lucide-react";
+import { Download, Loader2, Play, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AuthButton } from "@/components/AuthButton";
 import { useAuth } from "@/components/AuthProvider";
 import { Banner } from "@/components/Banner";
 import { BenchmarkBar } from "@/components/BenchmarkBar";
+import { BillingBadge } from "@/components/BillingBadge";
 import { EmailDigestSettings } from "@/components/EmailDigestSettings";
+import { LandingPage } from "@/components/LandingPage";
 import { MoversList } from "@/components/MoversList";
 import { NewsFeed } from "@/components/NewsFeed";
+import { PriceAlerts } from "@/components/PriceAlerts";
 import { RegimePanel } from "@/components/RegimePanel";
 import { ScreenerResults } from "@/components/ScreenerResults";
 import { TickerForm } from "@/components/TickerForm";
 import { TickerPills } from "@/components/TickerPills";
 import { TrendingNews } from "@/components/TrendingNews";
-import { runScreener, type ScreenerPayload } from "@/lib/api";
-import { useCachedScreener, useDefaults, useTickers } from "@/lib/hooks";
+import { runScreener, screenerExportUrl, type ScreenerPayload } from "@/lib/api";
+import {
+  useBillingStatus,
+  useCachedScreener,
+  useDefaults,
+  useTickers,
+} from "@/lib/hooks";
 
 export default function HomePage() {
   const { user, loading: authLoading } = useAuth();
   const signedIn = !!user;
   const { tickers } = useTickers(signedIn);
   const { defaults } = useDefaults();
+  const { isPro } = useBillingStatus(signedIn);
 
   // Pre-computed results (loads instantly from Postgres cache, refreshed every 4h by cron)
   const { payload: cached, loading: cachedLoading } = useCachedScreener();
 
-  // Live override — user-triggered run against their watchlist
+  // Live override — user-triggered run against their watchlist (Pro only)
   const [running, setRunning] = useState(false);
   const [livePayload, setLivePayload] = useState<ScreenerPayload | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
@@ -63,7 +72,11 @@ export default function HomePage() {
       );
       setLivePayload(res);
     } catch (err) {
-      setRunError(err instanceof Error ? err.message : "screener failed");
+      const msg = err instanceof Error ? err.message : "screener failed";
+      // Surface upgrade prompt if user hit the Pro gate
+      setRunError(
+        msg.includes("Pro subscription") ? "Live screener requires Pro — upgrade at /#pricing" : msg
+      );
     } finally {
       setRunning(false);
     }
@@ -83,6 +96,11 @@ export default function HomePage() {
     return `${hrs}h ago`;
   }
 
+  // Show the landing/marketing page to visitors who are not signed in
+  if (!authLoading && !signedIn) {
+    return <LandingPage />;
+  }
+
   return (
     <main className="relative min-h-screen pb-12">
       <Banner />
@@ -92,7 +110,8 @@ export default function HomePage() {
         Refreshed every 4 hours.
       </p>
 
-      <div className="absolute top-3 right-3 z-10">
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+        <BillingBadge />
         <AuthButton />
       </div>
 
@@ -110,6 +129,13 @@ export default function HomePage() {
             signedIn={signedIn}
             defaults={defaults}
           />
+          {!isPro && tickers.length >= 5 && (
+            <p className="text-b7-green-muted text-xs">
+              {`> Free plan: 5-ticker limit reached. `}
+              <a href="/#pricing" className="text-b7-green hover:underline">Upgrade to Pro</a>
+              {` for unlimited slots.`}
+            </p>
+          )}
         </section>
 
         {/* Screener controls row */}
@@ -119,6 +145,7 @@ export default function HomePage() {
             onClick={handleRun}
             disabled={running}
             aria-busy={running}
+            title={isPro ? "Run live screener on your watchlist" : "Live screener requires Pro"}
             className="inline-flex items-center gap-2 px-3 py-1 border border-b7-green-border text-b7-green hover:bg-b7-green/10 hover:text-b7-green-dim transition rounded-sm uppercase text-xs disabled:opacity-50"
           >
             {running ? (
@@ -129,7 +156,9 @@ export default function HomePage() {
             ) : (
               <>
                 <Play size={14} aria-hidden="true" />
-                <span>[ &gt; RUN ON WATCHLIST ]</span>
+                <span>
+                  {isPro ? "[ > RUN ON WATCHLIST ]" : "[ > RUN — PRO ]"}
+                </span>
               </>
             )}
           </button>
@@ -143,6 +172,19 @@ export default function HomePage() {
               <RefreshCw size={12} aria-hidden="true" />
               <span>[ SHOW FULL MARKET ]</span>
             </button>
+          )}
+
+          {/* CSV export — Pro only */}
+          {isPro && payload && (
+            <a
+              href={screenerExportUrl()}
+              download
+              className="inline-flex items-center gap-1 px-3 py-1 border border-b7-green-border/60 text-b7-green-muted hover:text-b7-green transition rounded-sm uppercase text-xs"
+              title="Download screener results as CSV"
+            >
+              <Download size={12} aria-hidden="true" />
+              <span>[ CSV ]</span>
+            </a>
           )}
 
           {/* Status badge */}
@@ -170,6 +212,8 @@ export default function HomePage() {
           results={payload?.results ?? []}
           loading={running || (!payload && cachedLoading)}
         />
+
+        <PriceAlerts />
 
         <MoversList symbols={mergedSymbols} />
 

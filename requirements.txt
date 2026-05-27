@@ -20,3 +20,4 @@ pydantic-settings>=2.0
 itsdangerous>=2.1
 python-multipart>=0.0.9
 slowapi>=0.1.9
+stripe>=7.0

@@ -272,3 +272,71 @@ export function updatePreferences(
     body: JSON.stringify(body),
   });
 }
+
+// ----- billing -----
+export type BillingStatus = {
+  plan: "free" | "pro";
+  status: string;
+  period_end: string | null;
+  publishable_key?: string;
+};
+
+export type PriceAlert = {
+  id: number;
+  symbol: string;
+  condition: "above" | "below";
+  target: number;
+  triggered: boolean;
+  created_at: string | null;
+};
+
+export function getBillingStatus(): Promise<BillingStatus> {
+  return request<BillingStatus>("/api/billing/status");
+}
+
+export function createCheckoutSession(): Promise<{ url: string }> {
+  return request<{ url: string }>("/api/billing/checkout", { method: "POST" });
+}
+
+export function getBillingPortalUrl(): Promise<{ url: string }> {
+  return request<{ url: string }>("/api/billing/portal");
+}
+
+// ----- alerts -----
+export function getAlerts(): Promise<PriceAlert[]> {
+  return request<PriceAlert[]>("/api/alerts");
+}
+
+export function createAlert(
+  symbol: string,
+  condition: "above" | "below",
+  target: number,
+): Promise<PriceAlert> {
+  return request<PriceAlert>("/api/alerts", {
+    method: "POST",
+    body: JSON.stringify({ symbol, condition, target }),
+  });
+}
+
+export function deleteAlert(id: number): Promise<void> {
+  return request<void>(`/api/alerts/${id}`, { method: "DELETE" });
+}
+
+// ----- screener extras -----
+export function getScreenerHistory(days = 7): Promise<
+  { id: number; ran_at: string; results_count: number; top_5_tickers: string[]; error: string | null }[]
+> {
+  return request(`/api/screener/history?days=${days}`);
+}
+
+export function getSharedScreenerResult(id: number): Promise<{
+  id: number;
+  ran_at: string;
+  results_count: number;
+  top_picks: ScreenerResultRow[];
+}> {
+  return request(`/api/screener/share/${id}`);
+}
+
+export const screenerExportUrl = (): string =>
+  `${API_URL}/api/screener/export`;
