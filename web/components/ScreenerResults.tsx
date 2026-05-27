@@ -102,6 +102,7 @@ function SkeletonRow() {
 export function ScreenerResults({ results, loading = false }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [copied, setCopied] = useState(false);
 
   const sorted = useMemo(() => {
     const copy = [...results];
@@ -182,8 +183,6 @@ export function ScreenerResults({ results, loading = false }: Props) {
       </div>
     );
   }
-
-  const [copied, setCopied] = useState(false);
 
   function copySymbols() {
     const syms = sorted.map((r) => r.ticker).join(", ");
