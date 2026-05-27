@@ -75,8 +75,9 @@ def run_full_screener() -> Dict[str, Any]:
         )
         records_for_filter = scored_df.to_dict(orient="records")
 
-        # Apply filters (using defaults from config.yaml)
-        results_df = apply_filters(records_for_filter)
+        # Apply filters using default thresholds (same defaults as CLI config.yaml)
+        filter_cfg: Dict[str, Any] = {}  # empty → apply_filters uses built-in defaults
+        results_df = apply_filters(records_for_filter, filter_cfg)
         results = results_df.to_dict(orient="records")
         log.info(f"Screener completed: {len(results)} results")
 
