@@ -89,8 +89,33 @@ Examples:
     parser.add_argument("--cache-ttl", type=int, help="Cache TTL in seconds (default 3600)")
     parser.add_argument("--workers",   type=int, help="Concurrent fetch workers (default 4)")
     parser.add_argument("--gen-cron",  type=int, metavar="MIN", help="Print crontab line and exit")
+    parser.add_argument("--to-postgres", action="store_true",
+                        help="Write results to Postgres (uses $DATABASE_URL)")
     parser.add_argument("--verbose",   action="store_true")
     return parser
+
+
+def _persist_postgres(results_df, cfg, benchmarks, regime, *,
+                      universe_size, elapsed_sec, console, log) -> None:
+    """Write the run to Postgres; fail loudly (non-zero exit) so cron shows red."""
+    from screener.db import write_run
+    try:
+        run_id = write_run(
+            results_df,
+            regime=regime,
+            benchmarks=benchmarks,
+            config=cfg,
+            universe_size=universe_size,
+            elapsed_sec=elapsed_sec,
+            agent_names=cfg.get("agent_names"),
+        )
+    except Exception as exc:
+        log.error("postgres_write_failed: %s", exc)
+        console.print(f"[bold red]> POSTGRES WRITE FAILED:[/] {exc}")
+        raise SystemExit(1)
+    console.print(f"[bold bright_green]> POSTGRES:[/] wrote run #{run_id} "
+                  f"({len(results_df)} rows)")
+    log.info("postgres_write run_id=%s rows=%s", run_id, len(results_df))
 
 
 def run_once(args: argparse.Namespace, interactive: bool = True) -> None:
@@ -190,6 +215,13 @@ def run_once(args: argparse.Namespace, interactive: bool = True) -> None:
     results_df = apply_filters(records_for_filter, cfg)
     console.print(f"[{DG}]  {len(results_df)} leaders passed[/]")
     console.print()
+
+    if args.to_postgres:
+        _persist_postgres(
+            results_df, cfg, benchmarks, regime,
+            universe_size=len(tickers), elapsed_sec=time.time() - t0,
+            console=console, log=log,
+        )
 
     if results_df.empty:
         console.print("[yellow]  No stocks passed filters. Try relaxing thresholds.[/]")

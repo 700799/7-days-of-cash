@@ -1,0 +1,36 @@
+name: Screener Cron
+
+# NOTE: GitHub only runs `schedule` triggers from the repository's DEFAULT
+# branch, so the cron below activates once this is merged to `main`. Until
+# then, use the "Run workflow" button (workflow_dispatch) to test it.
+on:
+  schedule:
+    # Every 30 min, 13:00-21:00 UTC, Mon-Fri. GitHub cron is UTC and has no
+    # DST handling; this window covers US market hours year-round
+    # (09:30-16:00 ET is 13:30-20:00 UTC in summer, 14:30-21:00 in winter).
+    - cron: "*/30 13-21 * * 1-5"
+  workflow_dispatch: {}
+
+concurrency:
+  group: screener-cron
+  cancel-in-progress: false
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run screener and write to Postgres
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python main.py --no-interactive --no-strategy --to-postgres --formats csv
