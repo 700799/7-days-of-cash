@@ -1,7 +1,8 @@
 """Volume Surge agent — detects accumulation before the price move."""
+
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from .base import AgentResult, BaseAgent
 
@@ -10,7 +11,7 @@ class VolumeSurgeAgent(BaseAgent):
     name = "volume_surge"
     description = "Rising volume trend with rel_vol > 1.5x — smart money accumulation"
 
-    def evaluate(self, m: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> AgentResult:
+    def evaluate(self, m: Dict[str, Any], context: Dict[str, Any] | None = None) -> AgentResult:
         reasons = []
         flags = []
 

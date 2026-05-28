@@ -1,9 +1,10 @@
 """Watch mode — re-run the screener on a fixed interval, market-hour aware."""
+
 from __future__ import annotations
 
 import datetime as dt
 import time
-from typing import Callable, Optional
+from typing import Callable
 
 from .logger import get_logger
 
@@ -21,7 +22,7 @@ def watch(
     task: Callable[[], None],
     interval_minutes: int = 15,
     market_hours_only: bool = False,
-    max_iterations: Optional[int] = None,
+    max_iterations: int | None = None,
 ) -> None:
     """Run `task` every `interval_minutes` until interrupted.
 
@@ -32,7 +33,9 @@ def watch(
         max_iterations: stop after N iterations (None for infinite).
     """
     iteration = 0
-    log.info("watch started: interval=%dm market_hours_only=%s", interval_minutes, market_hours_only)
+    log.info(
+        "watch started: interval=%dm market_hours_only=%s", interval_minutes, market_hours_only
+    )
     try:
         while True:
             iteration += 1
@@ -40,7 +43,11 @@ def watch(
             if market_hours_only and not _is_market_open(now):
                 next_open = _next_market_open(now)
                 wait_sec = max(60, (next_open - now).total_seconds())
-                log.info("market closed; sleeping until %s (%.0f min)", next_open.isoformat(timespec="minutes"), wait_sec / 60)
+                log.info(
+                    "market closed; sleeping until %s (%.0f min)",
+                    next_open.isoformat(timespec="minutes"),
+                    wait_sec / 60,
+                )
                 time.sleep(min(wait_sec, 3600))
                 continue
 
