@@ -83,3 +83,63 @@ td.ticker { font-weight: 700; }
 }
 .error { border-color: var(--red); color: var(--red); }
 code { color: var(--fg); }
+
+/* Focus visibility for keyboard navigation. */
+:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
+a {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+a:hover { color: #aaffaa; }
+
+/* Long-form pages (disclaimer, privacy, terms). */
+.prose {
+  max-width: 760px;
+  line-height: 1.6;
+}
+.prose h2 {
+  color: var(--fg);
+  font-size: 1.05rem;
+  margin: 1.75rem 0 0.5rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.prose p {
+  color: var(--dim);
+  margin: 0 0 1rem;
+}
+.prose strong { color: var(--fg); }
+.prose a { color: var(--fg); }
+
+/* Footer. */
+.site-footer {
+  max-width: 1100px;
+  margin: 3rem auto 0;
+  padding: 1.25rem 1rem 2rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+  color: var(--dim);
+}
+.site-footer .disclaimer {
+  margin: 0 0 0.75rem;
+  color: var(--dim);
+}
+.site-footer .disclaimer strong { color: var(--fg); }
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+}
+.site-footer nav a {
+  color: var(--dim);
+  text-decoration: none;
+}
+.site-footer nav a:hover {
+  color: var(--fg);
+  text-decoration: underline;
+}

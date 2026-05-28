@@ -2,6 +2,7 @@
 
 Includes equity (VOO, VXF, VTIAX, QQQ, IWM), commodity (GLD), and bond (TLT) ETFs.
 """
+
 from __future__ import annotations
 
 import warnings
@@ -14,13 +15,17 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
 BENCHMARK_META = {
-    "VOO":   {"name": "S&P 500",        "description": "Large-cap US equities",         "asset_class": "equity"},
-    "QQQ":   {"name": "Nasdaq 100",     "description": "Mega-cap tech / growth",        "asset_class": "equity"},
-    "VXF":   {"name": "Extended Mkt",   "description": "Small+mid-cap US (ex-S&P 500)", "asset_class": "equity"},
-    "IWM":   {"name": "Russell 2000",   "description": "US small-cap",                  "asset_class": "equity"},
-    "VTIAX": {"name": "Total Intl",     "description": "International dev + EM",        "asset_class": "intl"},
-    "GLD":   {"name": "Gold",           "description": "SPDR Gold Shares",              "asset_class": "commodity"},
-    "TLT":   {"name": "20+y Treasury",  "description": "Long-duration bonds",           "asset_class": "bond"},
+    "VOO": {"name": "S&P 500", "description": "Large-cap US equities", "asset_class": "equity"},
+    "QQQ": {"name": "Nasdaq 100", "description": "Mega-cap tech / growth", "asset_class": "equity"},
+    "VXF": {
+        "name": "Extended Mkt",
+        "description": "Small+mid-cap US (ex-S&P 500)",
+        "asset_class": "equity",
+    },
+    "IWM": {"name": "Russell 2000", "description": "US small-cap", "asset_class": "equity"},
+    "VTIAX": {"name": "Total Intl", "description": "International dev + EM", "asset_class": "intl"},
+    "GLD": {"name": "Gold", "description": "SPDR Gold Shares", "asset_class": "commodity"},
+    "TLT": {"name": "20+y Treasury", "description": "Long-duration bonds", "asset_class": "bond"},
 }
 
 

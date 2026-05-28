@@ -4,18 +4,19 @@ An agent receives a metrics dict for a single stock plus optional benchmark
 context and returns an AgentResult with a 0-100 score, conviction tier, and
 explanatory reasons.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 @dataclass
 class AgentResult:
     name: str
-    score: float                  # 0-100
-    tier: str                     # "strong" | "moderate" | "weak" | "skip"
+    score: float  # 0-100
+    tier: str  # "strong" | "moderate" | "weak" | "skip"
     reasons: List[str] = field(default_factory=list)
     flags: List[str] = field(default_factory=list)
 
@@ -39,8 +40,9 @@ class BaseAgent(ABC):
         self.config = config
 
     @abstractmethod
-    def evaluate(self, metrics: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> AgentResult:
-        ...
+    def evaluate(
+        self, metrics: Dict[str, Any], context: Dict[str, Any] | None = None
+    ) -> AgentResult: ...
 
     @staticmethod
     def tier_for(score: float) -> str:

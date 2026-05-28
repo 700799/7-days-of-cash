@@ -1,4 +1,5 @@
 """SQLite-backed OHLCV cache with TTL-based invalidation."""
+
 from __future__ import annotations
 
 import os
@@ -6,7 +7,7 @@ import pickle
 import sqlite3
 import time
 from contextlib import contextmanager
-from typing import Dict, Optional
+from typing import Dict
 
 import pandas as pd
 
@@ -52,7 +53,7 @@ class OHLCVCache:
         finally:
             conn.close()
 
-    def get(self, ticker: str, period: str) -> Optional[pd.DataFrame]:
+    def get(self, ticker: str, period: str) -> pd.DataFrame | None:
         cutoff = int(time.time()) - self.ttl_sec
         with self._conn() as c:
             row = c.execute(

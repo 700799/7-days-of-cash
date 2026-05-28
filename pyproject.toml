@@ -1,0 +1,40 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+  "outputs",
+  "web/.next",
+  "web/node_modules",
+]
+
+[tool.ruff.lint]
+# Conservative rule set: real bug catchers, no style nits.
+# Tighten over time once the codebase is formatted and stabilized.
+select = [
+  "E",   # pycodestyle errors
+  "F",   # pyflakes (unused imports, undefined names)
+  "W",   # pycodestyle warnings
+  "I",   # isort
+  "UP",  # pyupgrade
+  "B",   # flake8-bugbear (real bug patterns)
+]
+ignore = [
+  "E501",  # line length handled by formatter
+  "E701",  # multiple statements on one line — intentional compact CLI override style
+  "E741",  # ambiguous variable name (l, I, O)
+  "B008",  # function call in default arg (FastAPI/Typer/Click style)
+  "B904",  # raise ... from err — fine without when reraising
+  "B007",  # unused loop control variable
+  "UP006", # use list[x] not List[x] — fine either way
+  "UP007", # X | None vs Optional[X] — fine either way
+  "UP015", # unnecessary open mode arg
+  "UP035", # deprecated typing imports — fine either way
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402", "F401"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

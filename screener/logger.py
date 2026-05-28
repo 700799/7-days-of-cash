@@ -1,4 +1,5 @@
 """Structured logging with optional file rotation."""
+
 from __future__ import annotations
 
 import logging
@@ -6,12 +7,13 @@ import os
 import sys
 from logging.handlers import RotatingFileHandler
 
-
 _FORMAT = "%(asctime)s | %(levelname)-7s | %(name)-22s | %(message)s"
 _DATE_FORMAT = "%H:%M:%S"
 
 
-def get_logger(name: str = "best7days", level: str = "INFO", log_file: str | None = None) -> logging.Logger:
+def get_logger(
+    name: str = "best7days", level: str = "INFO", log_file: str | None = None
+) -> logging.Logger:
     logger = logging.getLogger(name)
     if logger.handlers:
         return logger

@@ -1,13 +1,14 @@
 """Technical indicator computations: RSI, MACD, MAs, ATR, volume trend."""
+
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
 
 
-def compute_metrics(ticker: str, df: pd.DataFrame) -> Optional[Dict[str, Any]]:
+def compute_metrics(ticker: str, df: pd.DataFrame) -> Dict[str, Any] | None:
     """Compute the full metric dict for one ticker, or None if insufficient data."""
     try:
         df = df.sort_index()

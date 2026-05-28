@@ -1,6 +1,6 @@
 import { getLatestRun, getResults, type Result } from "@/lib/db";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 function pct(v: number | null): string {
   if (v === null) return "—";

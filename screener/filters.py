@@ -1,4 +1,5 @@
 """Configurable vectorized filters operating on the metric DataFrame."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -14,8 +15,12 @@ def apply_filters(records: List[Dict[str, Any]], config: Dict[str, Any]) -> pd.D
     active = config.get("active_filters", set())
     if not active:
         active = {
-            "min_price", "min_gain_7d", "min_avg_volume",
-            "max_rsi", "market_cap", "exclude_volatility",
+            "min_price",
+            "min_gain_7d",
+            "min_avg_volume",
+            "max_rsi",
+            "market_cap",
+            "exclude_volatility",
             "min_dollar_vol",
         }
 

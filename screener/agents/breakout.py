@@ -1,7 +1,8 @@
 """Breakout agent — looks for high-volume breaks near 52-week highs."""
+
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from .base import AgentResult, BaseAgent
 
@@ -10,7 +11,7 @@ class BreakoutAgent(BaseAgent):
     name = "breakout"
     description = "High-volume break near 52w high, RSI crossing 60, healthy MACD"
 
-    def evaluate(self, m: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> AgentResult:
+    def evaluate(self, m: Dict[str, Any], context: Dict[str, Any] | None = None) -> AgentResult:
         reasons = []
         flags = []
 

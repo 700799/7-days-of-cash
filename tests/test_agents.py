@@ -1,47 +1,97 @@
 """Unit tests for strategy agents."""
+
 import pytest
 
 from screener.agents import (
-    MomentumAgent, BreakoutAgent, VolumeSurgeAgent,
-    RelativeStrengthAgent, MeanReversionAgent, build_agents,
+    BreakoutAgent,
+    MeanReversionAgent,
+    MomentumAgent,
+    RelativeStrengthAgent,
+    VolumeSurgeAgent,
+    build_agents,
 )
 from screener.orchestrator import score_records
 
 
 def _strong_momentum():
     return {
-        "ticker": "MOM", "price": 50, "change_5d": 8, "change_7d": 12, "change_20d": 20,
-        "rsi_14": 65, "vol_trend_5d": 1000, "vol_trend_7d": 1500, "macd_hist": 0.5,
-        "pct_from_ma50": 8, "pct_from_52w_high": -3, "rel_vol": 1.8,
-        "ma_50": 45, "ma_200": 40, "atr_pct": 3, "gap_pct": 0.5,
-        "dollar_vol_20d": 50_000_000, "pct_from_ma20": 3,
+        "ticker": "MOM",
+        "price": 50,
+        "change_5d": 8,
+        "change_7d": 12,
+        "change_20d": 20,
+        "rsi_14": 65,
+        "vol_trend_5d": 1000,
+        "vol_trend_7d": 1500,
+        "macd_hist": 0.5,
+        "pct_from_ma50": 8,
+        "pct_from_52w_high": -3,
+        "rel_vol": 1.8,
+        "ma_50": 45,
+        "ma_200": 40,
+        "atr_pct": 3,
+        "gap_pct": 0.5,
+        "dollar_vol_20d": 50_000_000,
+        "pct_from_ma20": 3,
     }
 
 
 def _strong_breakout():
     return {
-        "ticker": "BRK", "price": 50, "change_5d": 6, "change_7d": 8, "change_20d": 10,
-        "rsi_14": 65, "vol_trend_5d": 500, "vol_trend_7d": 800, "macd_hist": 0.3,
-        "pct_from_ma50": 5, "pct_from_52w_high": -1, "rel_vol": 2.5,
-        "ma_50": 47, "ma_200": 42, "atr_pct": 4, "gap_pct": 3,
-        "dollar_vol_20d": 20_000_000, "pct_from_ma20": 5,
+        "ticker": "BRK",
+        "price": 50,
+        "change_5d": 6,
+        "change_7d": 8,
+        "change_20d": 10,
+        "rsi_14": 65,
+        "vol_trend_5d": 500,
+        "vol_trend_7d": 800,
+        "macd_hist": 0.3,
+        "pct_from_ma50": 5,
+        "pct_from_52w_high": -1,
+        "rel_vol": 2.5,
+        "ma_50": 47,
+        "ma_200": 42,
+        "atr_pct": 4,
+        "gap_pct": 3,
+        "dollar_vol_20d": 20_000_000,
+        "pct_from_ma20": 5,
     }
 
 
 def _strong_meanrev():
     return {
-        "ticker": "MR", "price": 100, "change_5d": 0, "change_7d": -2, "change_20d": 5,
-        "rsi_14": 42, "vol_trend_5d": 0, "vol_trend_7d": 0, "macd_hist": -0.05,
-        "pct_from_ma50": -2, "pct_from_52w_high": -6, "rel_vol": 1.0,
-        "ma_50": 102, "ma_200": 95, "atr_pct": 2, "gap_pct": 0,
-        "dollar_vol_20d": 10_000_000, "pct_from_ma20": -1,
+        "ticker": "MR",
+        "price": 100,
+        "change_5d": 0,
+        "change_7d": -2,
+        "change_20d": 5,
+        "rsi_14": 42,
+        "vol_trend_5d": 0,
+        "vol_trend_7d": 0,
+        "macd_hist": -0.05,
+        "pct_from_ma50": -2,
+        "pct_from_52w_high": -6,
+        "rel_vol": 1.0,
+        "ma_50": 102,
+        "ma_200": 95,
+        "atr_pct": 2,
+        "gap_pct": 0,
+        "dollar_vol_20d": 10_000_000,
+        "pct_from_ma20": -1,
     }
 
 
-@pytest.mark.parametrize("agent_cls", [
-    MomentumAgent, BreakoutAgent, VolumeSurgeAgent,
-    RelativeStrengthAgent, MeanReversionAgent,
-])
+@pytest.mark.parametrize(
+    "agent_cls",
+    [
+        MomentumAgent,
+        BreakoutAgent,
+        VolumeSurgeAgent,
+        RelativeStrengthAgent,
+        MeanReversionAgent,
+    ],
+)
 def test_agent_returns_valid_score_range(agent_cls):
     agent = agent_cls()
     result = agent.evaluate(_strong_momentum(), context={"benchmarks": {}})
