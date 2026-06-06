@@ -3,12 +3,13 @@
 psycopg2 is imported lazily so the rest of the CLI runs without it installed;
 it is only needed when `--to-postgres` is used.
 """
+
 from __future__ import annotations
 
 import math
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -17,27 +18,47 @@ SCHEMA_PATH = Path(__file__).resolve().parent.parent / "db" / "schema.sql"
 
 # Metric columns that map to dedicated table columns, in INSERT order.
 _CORE_COLUMNS: List[str] = [
-    "ticker", "price", "change_5d", "change_7d", "change_20d",
-    "avg_vol_20d", "rel_vol", "vol_trend_5d", "vol_trend_7d", "dollar_vol_20d",
-    "ma_20", "ma_50", "ma_200", "pct_from_ma20", "pct_from_ma50",
-    "pct_from_52w_high", "rsi_14", "atr_14", "atr_pct", "macd_hist",
-    "avg_range_pct", "gap_pct", "composite_score", "best_strategy",
-    "top_reasons", "flags",
+    "ticker",
+    "price",
+    "change_5d",
+    "change_7d",
+    "change_20d",
+    "avg_vol_20d",
+    "rel_vol",
+    "vol_trend_5d",
+    "vol_trend_7d",
+    "dollar_vol_20d",
+    "ma_20",
+    "ma_50",
+    "ma_200",
+    "pct_from_ma20",
+    "pct_from_ma50",
+    "pct_from_52w_high",
+    "rsi_14",
+    "atr_14",
+    "atr_pct",
+    "macd_hist",
+    "avg_range_pct",
+    "gap_pct",
+    "composite_score",
+    "best_strategy",
+    "top_reasons",
+    "flags",
 ]
 
 
 def _require_psycopg2():
     try:
         import psycopg2
+
         return psycopg2
     except ImportError as exc:  # pragma: no cover - environment dependent
         raise RuntimeError(
-            "psycopg2 is required for --to-postgres. Install it with: "
-            "pip install psycopg2-binary"
+            "psycopg2 is required for --to-postgres. Install it with: pip install psycopg2-binary"
         ) from exc
 
 
-def _resolve_dsn(dsn: Optional[str]) -> str:
+def _resolve_dsn(dsn: str | None) -> str:
     dsn = dsn or os.environ.get("DATABASE_URL")
     if not dsn:
         raise RuntimeError(
@@ -105,13 +126,13 @@ def _build_rows(df: pd.DataFrame, run_id: int) -> List[Tuple]:
 def write_run(
     df: pd.DataFrame,
     *,
-    regime: Optional[Dict[str, Any]] = None,
-    benchmarks: Optional[Dict[str, Any]] = None,
-    config: Optional[Dict[str, Any]] = None,
+    regime: Dict[str, Any] | None = None,
+    benchmarks: Dict[str, Any] | None = None,
+    config: Dict[str, Any] | None = None,
     universe_size: int = 0,
     elapsed_sec: float = 0.0,
-    agent_names: Optional[List[str]] = None,
-    dsn: Optional[str] = None,
+    agent_names: List[str] | None = None,
+    dsn: str | None = None,
 ) -> int:
     """Insert one run plus its ranked results in a single transaction.
 

@@ -1,12 +1,18 @@
 """Unit tests for the filter pipeline."""
+
 from screener.filters import apply_filters
 
 
 def _rec(ticker, price=10, change_7d=10, vol=1_000_000, rsi=60, dvol=20_000_000, e52=-5):
     return {
-        "ticker": ticker, "price": price, "change_7d": change_7d,
-        "avg_vol_20d": vol, "rsi_14": rsi, "dollar_vol_20d": dvol,
-        "pct_from_52w_high": e52, "avg_range_pct": 5.0,
+        "ticker": ticker,
+        "price": price,
+        "change_7d": change_7d,
+        "avg_vol_20d": vol,
+        "rsi_14": rsi,
+        "dollar_vol_20d": dvol,
+        "pct_from_52w_high": e52,
+        "avg_range_pct": 5.0,
     }
 
 

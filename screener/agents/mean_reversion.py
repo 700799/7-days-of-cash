@@ -1,7 +1,8 @@
 """Mean Reversion agent — flags pullbacks in established uptrends."""
+
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from .base import AgentResult, BaseAgent
 
@@ -10,7 +11,7 @@ class MeanReversionAgent(BaseAgent):
     name = "mean_reversion"
     description = "Pullback to 20-MA in a long-term uptrend (50-MA > 200-MA, RSI < 50)"
 
-    def evaluate(self, m: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> AgentResult:
+    def evaluate(self, m: Dict[str, Any], context: Dict[str, Any] | None = None) -> AgentResult:
         reasons = []
         flags = []
 
@@ -20,7 +21,6 @@ class MeanReversionAgent(BaseAgent):
         ma_50 = m.get("ma_50", 0.0)
         ma_200 = m.get("ma_200", 0.0)
         c5 = m.get("change_5d", 0.0)
-        atr_pct = m.get("atr_pct", 1.0)
 
         # Long-term uptrend filter
         uptrend = ma_50 > ma_200

@@ -1,7 +1,8 @@
 """Momentum agent — rewards strong recent gains with rising volume."""
+
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from .base import AgentResult, BaseAgent
 
@@ -10,12 +11,11 @@ class MomentumAgent(BaseAgent):
     name = "momentum"
     description = "Strong multi-timeframe gains with rising volume and healthy RSI"
 
-    def evaluate(self, m: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> AgentResult:
+    def evaluate(self, m: Dict[str, Any], context: Dict[str, Any] | None = None) -> AgentResult:
         reasons = []
         flags = []
 
         c7 = m.get("change_7d", 0.0)
-        c5 = m.get("change_5d", 0.0)
         c20 = m.get("change_20d", 0.0)
         rsi = m.get("rsi_14", 50.0)
         v5 = m.get("vol_trend_5d", 0.0)
@@ -24,7 +24,7 @@ class MomentumAgent(BaseAgent):
         pct_ma50 = m.get("pct_from_ma50", 0.0)
 
         # Score: gain × volume confirmation × healthy RSI
-        gain_score = self.clip(c7 * 4, 0, 50)            # 0-50 for 0-12.5%+ gain
+        gain_score = self.clip(c7 * 4, 0, 50)  # 0-50 for 0-12.5%+ gain
         vol_score = 0
         if v5 > 0 and v7 > 0:
             vol_score += 20

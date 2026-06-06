@@ -1,28 +1,28 @@
 """Multi-agent orchestrator that combines strategy agent scores into a composite ranking."""
+
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import pandas as pd
 
 from .agents import build_agents
 
-
 DEFAULT_WEIGHTS = {
-    "momentum":          1.0,
-    "breakout":          0.9,
-    "volume_surge":      0.9,
+    "momentum": 1.0,
+    "breakout": 0.9,
+    "volume_surge": 0.9,
     "relative_strength": 1.0,
-    "mean_reversion":    0.7,
+    "mean_reversion": 0.7,
 }
 
 
 def score_records(
     records: List[Dict[str, Any]],
-    benchmarks: Optional[Dict[str, Dict[str, Any]]] = None,
-    regime: Optional[Dict[str, str]] = None,
-    agent_names: Optional[List[str]] = None,
-    weights: Optional[Dict[str, float]] = None,
+    benchmarks: Dict[str, Dict[str, Any]] | None = None,
+    regime: Dict[str, str] | None = None,
+    agent_names: List[str] | None = None,
+    weights: Dict[str, float] | None = None,
 ) -> pd.DataFrame:
     """Score every record with every agent and build a composite DataFrame."""
     if not records:

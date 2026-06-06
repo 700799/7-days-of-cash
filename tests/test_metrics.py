@@ -1,9 +1,10 @@
 """Unit tests for technical indicator computations."""
+
 import numpy as np
 import pandas as pd
 import pytest
 
-from screener.metrics import compute_metrics, _linreg_slope, _rsi, _atr, _macd_histogram
+from screener.metrics import _atr, _linreg_slope, _macd_histogram, _rsi, compute_metrics
 
 
 def _fake_ohlcv(n: int = 40, trend: float = 0.005, seed: int = 42) -> pd.DataFrame:
@@ -15,18 +16,33 @@ def _fake_ohlcv(n: int = 40, trend: float = 0.005, seed: int = 42) -> pd.DataFra
     low = close * (1 - np.abs(rng.normal(0, 0.008, n)))
     open_ = close * (1 + rng.normal(0, 0.003, n))
     volume = rng.integers(500_000, 5_000_000, n).astype(float)
-    return pd.DataFrame({
-        "Open": open_, "High": high, "Low": low,
-        "Close": close, "Volume": volume,
-    }, index=pd.date_range("2025-01-01", periods=n, freq="D"))
+    return pd.DataFrame(
+        {
+            "Open": open_,
+            "High": high,
+            "Low": low,
+            "Close": close,
+            "Volume": volume,
+        },
+        index=pd.date_range("2025-01-01", periods=n, freq="D"),
+    )
 
 
 def test_compute_metrics_returns_required_fields():
     df = _fake_ohlcv()
     m = compute_metrics("TEST", df)
     assert m is not None
-    required = {"ticker", "price", "change_7d", "rsi_14", "macd_hist",
-                "ma_20", "ma_50", "atr_14", "pct_from_52w_high"}
+    required = {
+        "ticker",
+        "price",
+        "change_7d",
+        "rsi_14",
+        "macd_hist",
+        "ma_20",
+        "ma_50",
+        "atr_14",
+        "pct_from_52w_high",
+    }
     assert required.issubset(m.keys())
 
 

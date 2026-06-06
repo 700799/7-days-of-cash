@@ -10,6 +10,7 @@ Usage:
     python main.py --refresh-cache              # force re-download
     python main.py --gen-cron 30                # print a crontab line
 """
+
 from __future__ import annotations
 
 import argparse
@@ -39,16 +40,26 @@ def _load_config(path: str = "config.yaml") -> Dict[str, Any]:
 
 
 def _apply_cli_overrides(cfg: Dict[str, Any], args: argparse.Namespace) -> None:
-    if args.min_price   is not None: cfg["min_price"]      = args.min_price
-    if args.min_gain    is not None: cfg["min_gain_7d"]    = args.min_gain
-    if args.min_volume  is not None: cfg["min_avg_volume"] = args.min_volume
-    if args.max_rsi     is not None: cfg["max_rsi"]        = args.max_rsi
-    if args.cap         is not None: cfg["market_cap"]     = args.cap
-    if args.top         is not None: cfg["top_n"]          = args.top
-    if args.formats:                 cfg["formats"]        = [f.strip() for f in args.formats.split(",")]
-    if args.agents:                  cfg["agent_names"]    = [a.strip() for a in args.agents.split(",")]
-    if args.cache_ttl   is not None: cfg["cache_ttl"]      = args.cache_ttl
-    if args.workers     is not None: cfg["max_workers"]    = args.workers
+    if args.min_price is not None:
+        cfg["min_price"] = args.min_price
+    if args.min_gain is not None:
+        cfg["min_gain_7d"] = args.min_gain
+    if args.min_volume is not None:
+        cfg["min_avg_volume"] = args.min_volume
+    if args.max_rsi is not None:
+        cfg["max_rsi"] = args.max_rsi
+    if args.cap is not None:
+        cfg["market_cap"] = args.cap
+    if args.top is not None:
+        cfg["top_n"] = args.top
+    if args.formats:
+        cfg["formats"] = [f.strip() for f in args.formats.split(",")]
+    if args.agents:
+        cfg["agent_names"] = [a.strip() for a in args.agents.split(",")]
+    if args.cache_ttl is not None:
+        cfg["cache_ttl"] = args.cache_ttl
+    if args.workers is not None:
+        cfg["max_workers"] = args.workers
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -70,35 +81,38 @@ Examples:
   python main.py --tickers-file my.txt          # use custom ticker file
 """,
     )
-    parser.add_argument("--min-price",   type=float)
-    parser.add_argument("--min-gain",    type=float)
-    parser.add_argument("--min-volume",  type=int)
-    parser.add_argument("--max-rsi",     type=float)
-    parser.add_argument("--cap",         choices=["small", "mid", "large", "all"])
-    parser.add_argument("--top",         type=int)
-    parser.add_argument("--formats",     type=str, help="Comma list: csv,json,xlsx,parquet,html,md")
-    parser.add_argument("--agents",      type=str, help="Comma list of strategy agents")
+    parser.add_argument("--min-price", type=float)
+    parser.add_argument("--min-gain", type=float)
+    parser.add_argument("--min-volume", type=int)
+    parser.add_argument("--max-rsi", type=float)
+    parser.add_argument("--cap", choices=["small", "mid", "large", "all"])
+    parser.add_argument("--top", type=int)
+    parser.add_argument("--formats", type=str, help="Comma list: csv,json,xlsx,parquet,html,md")
+    parser.add_argument("--agents", type=str, help="Comma list of strategy agents")
     parser.add_argument("--no-interactive", action="store_true")
-    parser.add_argument("--no-strategy",    action="store_true")
-    parser.add_argument("--no-agents",      action="store_true", help="Skip agent scoring (faster)")
+    parser.add_argument("--no-strategy", action="store_true")
+    parser.add_argument("--no-agents", action="store_true", help="Skip agent scoring (faster)")
     parser.add_argument("--tickers-file", type=str)
-    parser.add_argument("--config",      type=str, default="config.yaml")
-    parser.add_argument("--watch",       type=int, metavar="MIN", help="Re-run every N minutes")
+    parser.add_argument("--config", type=str, default="config.yaml")
+    parser.add_argument("--watch", type=int, metavar="MIN", help="Re-run every N minutes")
     parser.add_argument("--market-hours-only", action="store_true")
     parser.add_argument("--refresh-cache", action="store_true", help="Bypass cache for this run")
     parser.add_argument("--cache-ttl", type=int, help="Cache TTL in seconds (default 3600)")
-    parser.add_argument("--workers",   type=int, help="Concurrent fetch workers (default 4)")
-    parser.add_argument("--gen-cron",  type=int, metavar="MIN", help="Print crontab line and exit")
-    parser.add_argument("--to-postgres", action="store_true",
-                        help="Write results to Postgres (uses $DATABASE_URL)")
-    parser.add_argument("--verbose",   action="store_true")
+    parser.add_argument("--workers", type=int, help="Concurrent fetch workers (default 4)")
+    parser.add_argument("--gen-cron", type=int, metavar="MIN", help="Print crontab line and exit")
+    parser.add_argument(
+        "--to-postgres", action="store_true", help="Write results to Postgres (uses $DATABASE_URL)"
+    )
+    parser.add_argument("--verbose", action="store_true")
     return parser
 
 
-def _persist_postgres(results_df, cfg, benchmarks, regime, *,
-                      universe_size, elapsed_sec, console, log) -> None:
+def _persist_postgres(
+    results_df, cfg, benchmarks, regime, *, universe_size, elapsed_sec, console, log
+) -> None:
     """Write the run to Postgres; fail loudly (non-zero exit) so cron shows red."""
     from screener.db import write_run
+
     try:
         run_id = write_run(
             results_df,
@@ -113,26 +127,41 @@ def _persist_postgres(results_df, cfg, benchmarks, regime, *,
         log.error("postgres_write_failed: %s", exc)
         console.print(f"[bold red]> POSTGRES WRITE FAILED:[/] {exc}")
         raise SystemExit(1)
-    console.print(f"[bold bright_green]> POSTGRES:[/] wrote run #{run_id} "
-                  f"({len(results_df)} rows)")
+    console.print(f"[bold bright_green]> POSTGRES:[/] wrote run #{run_id} ({len(results_df)} rows)")
     log.info("postgres_write run_id=%s rows=%s", run_id, len(results_df))
 
 
 def run_once(args: argparse.Namespace, interactive: bool = True) -> None:
     """One full pass: fetch, score, filter, render, save."""
     from screener import (
-        OHLCVCache, apply_filters, compute_metrics, fetch_batch,
-        fetch_benchmarks, get_logger, market_regime, save_outputs,
-        score_records, get_extended_tickers, load_custom_tickers,
+        OHLCVCache,
+        apply_filters,
+        compute_metrics,
+        fetch_batch,
+        fetch_benchmarks,
+        get_extended_tickers,
+        get_logger,
+        load_custom_tickers,
+        market_regime,
+        save_outputs,
+        score_records,
     )
     from screener.ui import (
-        console, print_banner, print_market_summary, print_results_table,
-        print_save_summary, print_strategy_guide, print_summary_stats,
-        print_top_reasons, run_agent_toggles, run_pill_toggles,
+        console,
+        print_banner,
+        print_market_summary,
+        print_results_table,
+        print_save_summary,
+        print_strategy_guide,
+        print_summary_stats,
+        print_top_reasons,
+        run_agent_toggles,
+        run_pill_toggles,
     )
 
-    log = get_logger("best7days", level="DEBUG" if args.verbose else "INFO",
-                     log_file="outputs/screener.log")
+    log = get_logger(
+        "best7days", level="DEBUG" if args.verbose else "INFO", log_file="outputs/screener.log"
+    )
     G, DG = "bright_green", "green"
 
     cfg = _load_config(args.config)
@@ -144,9 +173,18 @@ def run_once(args: argparse.Namespace, interactive: bool = True) -> None:
     if interactive and not args.no_interactive:
         cfg["active_filters"] = run_pill_toggles()
         if not args.no_agents:
-            cfg["agent_names"] = run_agent_toggles(set(cfg.get("agent_names", []) or [
-                "momentum", "breakout", "volume_surge", "relative_strength", "mean_reversion"
-            ]))
+            cfg["agent_names"] = run_agent_toggles(
+                set(
+                    cfg.get("agent_names", [])
+                    or [
+                        "momentum",
+                        "breakout",
+                        "volume_surge",
+                        "relative_strength",
+                        "mean_reversion",
+                    ]
+                )
+            )
     else:
         cfg["active_filters"] = set()
 
@@ -172,7 +210,7 @@ def run_once(args: argparse.Namespace, interactive: bool = True) -> None:
 
     console.print(f"[bold {G}]> SCANNING {len(tickers):,} TICKERS...[/]")
     console.print(
-        f"[{DG}]  Period: {cfg.get('period','35d')}  |  "
+        f"[{DG}]  Period: {cfg.get('period', '35d')}  |  "
         f"Workers: {cfg.get('max_workers', 4)}  |  Cache: {'OFF' if args.refresh_cache else 'ON'}[/]"
     )
     console.print()
@@ -191,7 +229,7 @@ def run_once(args: argparse.Namespace, interactive: bool = True) -> None:
     )
     post_stats = cache.stats()
     cache_hits = max(0, post_stats["fresh"] - pre_stats["fresh"]) if not args.refresh_cache else 0
-    console.print(f"[{DG}]  Fetched: {len(raw_data):,} tickers in {time.time()-t0:.1f}s[/]")
+    console.print(f"[{DG}]  Fetched: {len(raw_data):,} tickers in {time.time() - t0:.1f}s[/]")
 
     console.print(f"[{DG}]  Computing metrics...[/]")
     records = [m for t, df in raw_data.items() if (m := compute_metrics(t, df)) is not None]
@@ -199,7 +237,9 @@ def run_once(args: argparse.Namespace, interactive: bool = True) -> None:
     console.print()
 
     if not args.no_agents and records:
-        console.print(f"[bold {G}]> RUNNING {len(cfg.get('agent_names') or 5)} STRATEGY AGENTS...[/]")
+        console.print(
+            f"[bold {G}]> RUNNING {len(cfg.get('agent_names') or 5)} STRATEGY AGENTS...[/]"
+        )
         scored = score_records(
             records,
             benchmarks=benchmarks,
@@ -218,9 +258,14 @@ def run_once(args: argparse.Namespace, interactive: bool = True) -> None:
 
     if args.to_postgres:
         _persist_postgres(
-            results_df, cfg, benchmarks, regime,
-            universe_size=len(tickers), elapsed_sec=time.time() - t0,
-            console=console, log=log,
+            results_df,
+            cfg,
+            benchmarks,
+            regime,
+            universe_size=len(tickers),
+            elapsed_sec=time.time() - t0,
+            console=console,
+            log=log,
         )
 
     if results_df.empty:
@@ -238,7 +283,9 @@ def run_once(args: argparse.Namespace, interactive: bool = True) -> None:
 
     formats = cfg.get("formats") or ["csv"]
     paths = save_outputs(
-        results_df, output_dir=cfg.get("output_dir", "outputs"), formats=formats,
+        results_df,
+        output_dir=cfg.get("output_dir", "outputs"),
+        formats=formats,
     )
     print_save_summary(paths)
     console.print(f"\n[bold {G}]> DONE.  Good trading.[/]\n")
@@ -250,6 +297,7 @@ def main() -> None:
 
     if args.gen_cron is not None:
         from screener.scheduler import generate_cron
+
         cmd = f"cd {sys.path[0] or '.'} && python main.py --no-interactive --no-strategy"
         line = generate_cron(args.gen_cron, cmd, market_hours_only=True)
         print(line)
@@ -257,6 +305,7 @@ def main() -> None:
 
     if args.watch is not None:
         from screener.scheduler import watch
+
         watch(
             task=lambda: run_once(args, interactive=False),
             interval_minutes=args.watch,

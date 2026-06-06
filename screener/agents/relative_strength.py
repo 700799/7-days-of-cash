@@ -1,7 +1,8 @@
 """Relative Strength agent — outperformance vs broad market benchmarks."""
+
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from .base import AgentResult, BaseAgent
 
@@ -10,7 +11,7 @@ class RelativeStrengthAgent(BaseAgent):
     name = "relative_strength"
     description = "Outperformance vs VOO, VXF, QQQ — true RS leaders"
 
-    def evaluate(self, m: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> AgentResult:
+    def evaluate(self, m: Dict[str, Any], context: Dict[str, Any] | None = None) -> AgentResult:
         reasons = []
         flags = []
 
