@@ -5,6 +5,7 @@ from .cache import OHLCVCache
 from .data_fetcher import fetch_batch
 from .exporter import save_outputs
 from .filters import apply_filters
+from .herd import attach_herd, classify_herd, compute_breadth
 from .logger import get_logger
 from .metrics import compute_metrics
 from .orchestrator import score_records
@@ -21,6 +22,9 @@ __all__ = [
     "fetch_batch",
     "save_outputs",
     "apply_filters",
+    "attach_herd",
+    "classify_herd",
+    "compute_breadth",
     "get_logger",
     "compute_metrics",
     "score_records",

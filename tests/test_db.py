@@ -73,23 +73,25 @@ def test_build_rows_shape_and_rank():
     assert len(rows) == 2
     assert rows[0][0] == 42 and rows[0][1] == 1  # run_id, rank
     assert rows[1][1] == 2
-    assert len(rows[0]) == len(_CORE_COLUMNS) + 3  # run_id, rank, *core, agent_scores
+    # run_id, rank, *core, agent_scores, herd
+    assert len(rows[0]) == len(_CORE_COLUMNS) + 4
 
 
 def test_build_rows_emits_plain_python_scalars():
     rows = _build_rows(_scored_df(), run_id=1)
     for row in rows:
-        for value in row[:-1]:  # everything but agent_scores dict
+        for value in row[:-2]:  # everything but the trailing dicts
             assert not isinstance(value, np.generic), f"numpy leaked: {value!r}"
             assert value is None or isinstance(value, (int, float, str))
-        assert isinstance(row[-1], dict)
+        assert isinstance(row[-2], dict)  # agent_scores
+        assert isinstance(row[-1], dict)  # herd
 
 
 def test_build_rows_nan_becomes_none_and_agent_scores_captured():
     rows = _build_rows(_scored_df(), run_id=1)
     change_5d_idx = 2 + _CORE_COLUMNS.index("change_5d")
     assert rows[1][change_5d_idx] is None  # NaN -> None
-    agent_scores = rows[0][-1]
+    agent_scores = rows[0][-2]
     assert agent_scores["score_momentum"] == 90.0
     assert agent_scores["tier_momentum"] == "strong"
 
@@ -99,4 +101,23 @@ def test_build_rows_tolerates_missing_optional_columns():
     rows = _build_rows(df, run_id=1)
     composite_idx = 2 + _CORE_COLUMNS.index("composite_score")
     assert rows[0][composite_idx] is None  # absent column -> None
-    assert rows[0][-1] == {}  # no agent columns present
+    assert rows[0][-2] == {}  # no agent columns present
+    assert rows[0][-1] == {}  # no herd column present
+
+
+def test_build_rows_herd_dict_passthrough():
+    df = _scored_df()
+    herd = {
+        "herd_state": "CROWDED",
+        "herd_score": 71.5,
+        "herd_reasons": ["3.4 ATRs above 20-MA"],
+        "stop_suggest": 11.9,
+        "trim_zone": 14.2,
+    }
+    df["herd_state"] = ["CROWDED", None]
+    df["herd"] = [herd, float("nan")]  # second row: NaN cell, not a dict
+    rows = _build_rows(df, run_id=1)
+    herd_state_idx = 2 + _CORE_COLUMNS.index("herd_state")
+    assert rows[0][herd_state_idx] == "CROWDED"
+    assert rows[0][-1] == herd
+    assert rows[1][-1] == {}  # NaN swallowed to empty dict

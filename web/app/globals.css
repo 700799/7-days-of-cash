@@ -4,6 +4,7 @@
   --dim: #0a0;
   --border: #0a4d0a;
   --red: #ff5555;
+  --amber: #ffb000;
   --row-alt: #001400;
 }
 
@@ -83,6 +84,29 @@ td.ticker { font-weight: 700; }
 }
 .error { border-color: var(--red); color: var(--red); }
 code { color: var(--fg); }
+
+/* Herd-state badges (reuse .badge box model). */
+.hs-early { color: var(--dim); border-color: var(--dim); }
+.hs-accelerating { color: var(--fg); border-color: var(--fg); }
+.hs-crowded { color: var(--amber); border-color: var(--amber); }
+.hs-distribution { color: var(--red); border-color: var(--red); }
+.hs-neutral { color: var(--border); border-color: var(--border); }
+.flip {
+  color: var(--dim);
+  font-size: 0.75rem;
+  margin-left: 0.35rem;
+  white-space: nowrap;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin-top: 1.25rem;
+  font-size: 0.78rem;
+  color: var(--dim);
+}
+.legend > div { display: flex; align-items: baseline; gap: 0.45rem; }
 
 /* Focus visibility for keyboard navigation. */
 :focus-visible {

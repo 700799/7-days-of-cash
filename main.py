@@ -108,7 +108,7 @@ Examples:
 
 
 def _persist_postgres(
-    results_df, cfg, benchmarks, regime, *, universe_size, elapsed_sec, console, log
+    results_df, cfg, benchmarks, regime, *, breadth=None, universe_size, elapsed_sec, console, log
 ) -> None:
     """Write the run to Postgres; fail loudly (non-zero exit) so cron shows red."""
     from screener.db import write_run
@@ -119,6 +119,7 @@ def _persist_postgres(
             regime=regime,
             benchmarks=benchmarks,
             config=cfg,
+            breadth=breadth,
             universe_size=universe_size,
             elapsed_sec=elapsed_sec,
             agent_names=cfg.get("agent_names"),
@@ -136,6 +137,8 @@ def run_once(args: argparse.Namespace, interactive: bool = True) -> None:
     from screener import (
         OHLCVCache,
         apply_filters,
+        attach_herd,
+        compute_breadth,
         compute_metrics,
         fetch_batch,
         fetch_benchmarks,
@@ -234,6 +237,19 @@ def run_once(args: argparse.Namespace, interactive: bool = True) -> None:
     console.print(f"[{DG}]  Computing metrics...[/]")
     records = [m for t, df in raw_data.items() if (m := compute_metrics(t, df)) is not None]
     console.print(f"[{DG}]  {len(records):,} valid records[/]")
+
+    # Herd layer: descriptive crowd states per ticker + universe breadth.
+    # Runs on the full universe pre-scoring so both the agents path and
+    # --no-agents inherit it; deliberately does not feed composite_score.
+    attach_herd(records)
+    breadth = compute_breadth(records)
+    if breadth.get("n"):
+        console.print(
+            f"[{DG}]  Breadth: {breadth['pct_above_ma20']}% >20MA  |  "
+            f"{breadth['pct_pos_7d']}% pos 7d  |  "
+            f"RSI>70: {breadth['pct_rsi_hot']}%  |  "
+            f"52w highs: {breadth['new_52w_highs']}[/]"
+        )
     console.print()
 
     if not args.no_agents and records:
@@ -262,6 +278,7 @@ def run_once(args: argparse.Namespace, interactive: bool = True) -> None:
             cfg,
             benchmarks,
             regime,
+            breadth=breadth,
             universe_size=len(tickers),
             elapsed_sec=time.time() - t0,
             console=console,
@@ -283,7 +300,9 @@ def run_once(args: argparse.Namespace, interactive: bool = True) -> None:
 
     formats = cfg.get("formats") or ["csv"]
     paths = save_outputs(
-        results_df,
+        # The herd dict column would export as a stringified dict; keep the
+        # scalar herd_state/herd_score columns, which are useful in CSV.
+        results_df.drop(columns=["herd"], errors="ignore"),
         output_dir=cfg.get("output_dir", "outputs"),
         formats=formats,
     )
