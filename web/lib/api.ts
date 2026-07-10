@@ -4,24 +4,11 @@
 const ENV_API_URL =
   typeof process !== "undefined" ? process.env.NEXT_PUBLIC_API_URL : undefined;
 
-let warnedMissingApiUrl = false;
 function resolveApiUrl(): string {
+  // Same-origin by default: the Cloudflare Worker serves both the static app
+  // and /api/*. Set NEXT_PUBLIC_API_URL only when running the API separately
+  // (e.g. `wrangler dev` on :8787 next to `next dev` on :3000).
   if (ENV_API_URL) return ENV_API_URL;
-  // In dev, fall back to localhost so the UI keeps working without an env file.
-  if (
-    typeof process !== "undefined" &&
-    process.env.NODE_ENV === "development"
-  ) {
-    return "http://localhost:8000";
-  }
-  // In prod, fail loud rather than silently routing to localhost.
-  if (typeof window !== "undefined" && !warnedMissingApiUrl) {
-    warnedMissingApiUrl = true;
-    // eslint-disable-next-line no-console
-    console.error(
-      "NEXT_PUBLIC_API_URL is not set; API calls will fail.",
-    );
-  }
   return "";
 }
 

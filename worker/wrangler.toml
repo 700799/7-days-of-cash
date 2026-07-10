@@ -1,0 +1,40 @@
+# Best7DaysMula — single Worker serving the API (Hono) + static frontend assets.
+#
+# Deploy:
+#   wrangler d1 create b7dm                      # once; paste database_id below
+#   wrangler d1 migrations apply b7dm --remote
+#   wrangler secret put GOOGLE_CLIENT_ID
+#   wrangler secret put GOOGLE_CLIENT_SECRET
+#   wrangler secret put RESEND_API_KEY           # optional (email digest/alerts)
+#   cd ../web && npm run build                   # static export to web/out
+#   cd ../worker && wrangler deploy
+
+name = "best7daysmula"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+
+# Serve the Next.js static export. API routes in the Worker take precedence
+# because run_worker_first routes /api/* to the Worker before asset lookup.
+[assets]
+directory = "../web/out"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "b7dm"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[triggers]
+# */5: rolling slice refresh (~40 tickers/run, full universe ~80 min) + screener
+# assembly + price-alert checks. 13:00 UTC daily: email digests.
+crons = ["*/5 * * * *", "0 13 * * *"]
+
+[vars]
+# Public app origin — used for OAuth redirect URI and Origin-header CSRF checks.
+# Override per-environment; secrets (client id/secret, Resend) go in `wrangler secret`.
+APP_ORIGIN = "http://localhost:8787"
+
+[observability]
+enabled = true

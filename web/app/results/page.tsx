@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getSharedScreenerResult } from "@/lib/api";
 import type { ScreenerResultRow } from "@/lib/api";
 
@@ -18,15 +18,19 @@ function fmtPct(v: unknown): string {
   return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 }
 
-export default function SharedResultPage() {
-  const params = useParams();
-  const id = Number(params.id);
+function SharedResultInner() {
+  const params = useSearchParams();
+  const id = Number(params.get("id"));
   const [data, setData] = useState<SharedResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setError("Missing result id — use /results?id=N");
+      setLoading(false);
+      return;
+    }
     getSharedScreenerResult(id)
       .then(setData)
       .catch((e) => setError(e.message ?? "Not found"))
@@ -127,5 +131,19 @@ export default function SharedResultPage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function SharedResultPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-black text-b7-green font-mono max-w-4xl mx-auto px-4 py-8">
+          <div className="text-b7-green-muted text-xs animate-pulse">Loading…</div>
+        </main>
+      }
+    >
+      <SharedResultInner />
+    </Suspense>
   );
 }

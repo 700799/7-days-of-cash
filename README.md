@@ -192,7 +192,11 @@ Primary: yfinance (Yahoo Finance)
 ## > WEB APP (NEW)
 
 In addition to the terminal CLI, Best7DaysMula now ships with a full web UI:
-**Next.js 14** frontend + **FastAPI** backend + **Postgres (Neon)** storage + **Google OAuth**, deployable to **Vercel free tier**.
+**Next.js 14** frontend + **Cloudflare Worker** backend (TypeScript/Hono) + **D1 (SQLite)** storage + **Google OAuth**, deployable to the **Cloudflare free tier**.
+
+> The Python FastAPI backend under `api/` is **legacy** (Vercel-era) — kept for
+> reference, no longer the deploy path. The screener engine was ported to
+> TypeScript in `worker/src/engine/` with fixture-verified numerical parity.
 
 ### Features
 - Add/remove tickers via a form box; each ticker becomes a CRUD-able pill button
@@ -227,19 +231,30 @@ npm run dev                          # http://localhost:3000
 
 ```
 Best7DaysMula/
-├── screener/          # Original CLI engine (agents, metrics, filters)
-├── api/               # FastAPI backend (auth, tickers, news, screener)
-├── web/               # Next.js 14 frontend (App Router, Tailwind, Vitest)
-├── tests/             # Pytest suite — 55 tests covering both engine + API
-└── data/              # DuckDB file (gitignored)
+├── worker/            # Cloudflare Worker (TypeScript) — THE deploy target
+│   ├── src/engine/    #   Screener engine port (metrics, 5 agents, filters…)
+│   ├── src/routes/    #   Hono API routes (auth, tickers, news, screener…)
+│   ├── src/cron.ts    #   Rolling refresh + assembly + alerts + digests
+│   ├── migrations/    #   D1 (SQLite) schema
+│   └── test/          #   Vitest incl. Python↔TS parity fixtures
+├── web/               # Next.js 14 frontend (static export, Tailwind, Vitest)
+├── screener/          # Original Python CLI engine (still works locally)
+├── api/               # LEGACY: FastAPI backend from the Vercel era
+└── scripts/           # gen_universe.py, gen_parity_fixtures.py, …
 ```
 
 ### Tests
 
 ```bash
-pytest                 # backend: 55 tests
-cd web && npm test     # frontend: 14 tests
+cd worker && npm test  # engine parity vs Python fixtures: 37 tests
+cd web && npm test     # frontend: 44 tests
+pytest                 # legacy Python suite (engine + old API): 174 tests
 ```
+
+**Engine parity**: `scripts/gen_parity_fixtures.py` runs the Python engine on
+synthetic OHLCV series and dumps every metric, agent score, reason string, and
+composite ranking to `worker/test/fixtures/engine_parity.json`. The TS tests
+assert the port reproduces all of it. Regenerate after changing either engine.
 
 ### API surface
 - `GET  /api/auth/me`, `GET /api/auth/login/google`, `POST /api/auth/logout`
@@ -247,70 +262,108 @@ cd web && npm test     # frontend: 14 tests
 - `GET  /api/news/ticker/{symbol}`, `GET /api/news/market`, `GET /api/news/trending`
 - `GET  /api/movers/{symbol}`, `GET /api/movers?symbols=A,B,C`
 - `GET  /api/preferences`, `PATCH /api/preferences`
-- `POST /api/screener/run`
-- `POST /api/cron/refresh`, `POST /api/cron/digest` (Bearer-auth, Vercel Cron only)
+- `GET|POST /api/alerts`, `DELETE /api/alerts/{id}` (price alerts, emailed on trigger)
+- `POST /api/screener/run` (live, ≤40 tickers) · `GET /api/screener/cached` · `GET /api/screener/top?n=10`
+- `GET  /api/screener/history?days=7` · `GET /api/screener/share/{id}` (public) · `GET /api/screener/export` (CSV)
+- `GET  /api/status` (refresh-pipeline health) · `GET /api/health`
+- Scheduled work runs in the Worker's `scheduled()` handler (Cron Triggers) — no
+  HTTP cron endpoints, so there is no CRON_SECRET to protect.
 
 ---
 
-## > DEPLOY TO VERCEL (FREE)
+## > DEPLOY TO CLOUDFLARE (FREE)
+
+One Worker serves everything: the API (Hono + D1) **and** the static Next.js
+export, same-origin — no CORS, cookies just work.
 
 ```bash
-# 1. Create a free Neon Postgres database — https://neon.tech
-#    Copy the connection string (looks like: postgresql://user:pass@xxx.neon.tech/db?sslmode=require)
+# 0. Prereqs: a Cloudflare account + `npx wrangler login`
 
-# 2. Push this branch to GitHub (you've done this already)
+# 1. Create the D1 database and apply the schema
+cd worker
+npx wrangler d1 create b7dm            # copy the database_id it prints
+#    → paste it into worker/wrangler.toml [[d1_databases]] database_id
+npx wrangler d1 migrations apply b7dm --remote
 
-# 3. In Vercel:
-#    - Import the repo
-#    - Set environment variables (see .env.example):
-#        DATABASE_URL          (from Neon)
-#        GOOGLE_CLIENT_ID      (from Google Cloud Console OAuth)
-#        GOOGLE_CLIENT_SECRET
-#        SESSION_SECRET        (openssl rand -hex 32)
-#        CRON_SECRET           (openssl rand -hex 32)
-#        FRONTEND_URL          (https://your-app.vercel.app)
-#        BACKEND_URL           (same — they share the domain on Vercel)
-#        RESEND_API_KEY        (optional; if unset, falls back to SMTP)
-#    - Deploy
+# 2. Secrets (Google OAuth + optional Resend for email)
+npx wrangler secret put GOOGLE_CLIENT_ID
+npx wrangler secret put GOOGLE_CLIENT_SECRET
+npx wrangler secret put RESEND_API_KEY          # optional — email digest/alerts
 
-# 4. After first deploy, run the migration ONCE:
-#    From Vercel CLI:  vercel env pull .env  &&  python scripts/migrate.py
-#    Or trigger /api/cron/refresh manually with the Bearer token.
+# 3. Set APP_ORIGIN in wrangler.toml [vars] to your production URL
+#    (https://best7daysmula.<you>.workers.dev or your custom domain)
+
+# 4. Build the frontend, then deploy the Worker (assets bundle in with it)
+cd ../web && npm install && npm run build       # static export → web/out
+cd ../worker && npm install && npx wrangler deploy
+
+# 5. Google OAuth: add the production redirect URI in Google Cloud Console:
+#    https://<your-app-domain>/api/auth/callback
 ```
 
-Free tier limits stay clear because:
-- **Pre-computed screener** — full S&P 500 runs in cron every 4h (writes to Postgres). UI just reads → < 100ms.
-- **Cached everything** — news 4h TTL, movers 4h TTL, symbol validation 24h TTL.
-- **2 cron jobs** total (Vercel Hobby allows 2 free).
-- **No LLM calls** — "why it moved" uses heuristic (price + headlines).
+### Local dev
+
+```bash
+cd worker
+npx wrangler d1 migrations apply b7dm --local
+npx wrangler dev                                # http://localhost:8787 (API + static app)
+# Manually fire the refresh cron while developing:
+npx wrangler dev --test-scheduled
+curl "http://localhost:8787/__scheduled?cron=*/5+*+*+*+*"
+# Watch the rolling refresh advance:
+curl http://localhost:8787/api/status
+```
+
+### How it fits the free tier
+
+- **Rolling slice refresh** — a cron fires every 5 minutes and fetches ~35
+  tickers from Yahoo (staying under the 50-subrequest free-plan budget). The
+  full ~620-ticker universe refreshes continuously (~90 min per lap). Once
+  ≥70% of the universe is fresh, each tick also re-assembles the screener
+  (pure math over D1 rows) and checks price alerts.
+- On the **$5/mo Workers paid plan** (1000 subrequests/invocation) you can
+  raise `SLICE_SIZE` in `worker/src/cron.ts` to cover the universe in 1–2
+  invocations.
+- **Cached everything in D1** — news 15min/1h TTL, movers 4h TTL, symbol
+  validation 24h TTL, screener results persisted (last 200 runs).
+- **No LLM calls** — "why it moved" uses a heuristic (price + headlines).
 
 ---
 
 ## > SECURITY & ABUSE PROTECTION
 
-- **Rate limits** (per-user when logged in via cookie, else per-IP):
-  - 60/min default for cheap reads
-  - 30/min for `/api/news/*`
-  - 20/min for write ops (POST/PATCH/DELETE on watchlist)
-  - 10/min for `/api/auth/*` (slows brute-force)
-  - 5/min for `/api/screener/run` (the only endpoint that hits yfinance live)
-- **CORS**: strict allowlist (no wildcard with credentials), only your `FRONTEND_URL` + dev localhost.
-- **Body cap**: 64 KB max — any oversized POST returns 413 before parsing.
-- **Cron auth**: `/api/cron/*` requires `Authorization: Bearer ${CRON_SECRET}`, timing-safe compared. Returns 503 if `CRON_SECRET` env var is unset (refuse rather than allow).
-- **Live screener cap**: `/api/screener/run` rejects requests with > 50 tickers (use `/api/screener/cached` for the full universe).
-- **Symbol validation cache**: prevents repeated yfinance probing for the same invalid symbol (24h TTL per symbol).
-- **Security headers** (set in `vercel.json`): `X-Frame-Options: DENY`, HSTS preload, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` denying camera/mic/geo.
-- **`X-Robots-Tag: noindex, nofollow`** on every `/api/*` response — search engines won't index your data endpoints.
-- **`robots.txt`** blocks aggressive scrapers (Ahrefs, Semrush, MJ12, DotBot) and disallows crawling of `/api/`.
+- **Sessions**: random 256-bit tokens (Web Crypto) stored server-side in D1;
+  HttpOnly + SameSite=Lax + Secure cookies. No JWTs to leak.
+- **OAuth hardening**: `state` parameter round-tripped through a short-lived
+  HttpOnly cookie; token exchange server-side only.
+- **CSRF**: SameSite=Lax cookies *plus* an Origin-header check on every
+  mutating request (`POST/PATCH/DELETE` from a foreign origin → 403).
+- **Input validation**: every request body/query parsed with zod — strict
+  symbol regex (`^[A-Z][A-Z0-9.\-]{0,9}$`), bounded numbers, enum conditions.
+- **Body cap**: 64 KB max — oversized payloads rejected with 413 before parsing.
+- **Same-origin architecture**: frontend and API share one origin, so CORS is
+  simply never enabled — there is no cross-origin surface to misconfigure.
+- **No HTTP cron endpoints**: scheduled work runs in the Worker's internal
+  `scheduled()` handler, unreachable from the network.
+- **Live screener cap**: `/api/screener/run` rejects > 40 tickers (full
+  universe comes from the pre-computed `/cached` endpoint).
+- **Symbol validation cache** (24h TTL) prevents repeated Yahoo probing.
+- **Security headers** on every response: `X-Frame-Options`, nosniff, HSTS
+  (https only), `Referrer-Policy`, `Permissions-Policy`;
+  `X-Robots-Tag: noindex` on `/api/*`.
+- **Rate limiting**: add one free Cloudflare WAF rate-limiting rule for
+  `/api/*` in the dashboard (Security → WAF → Rate limiting rules) — e.g.
+  100 requests / 1 minute per IP. In-code caps bound the expensive paths.
 
 ### Estimated free-tier cost ceiling
 
 | Concern | Mitigation | Result |
 |---|---|---|
-| Yahoo Finance abuse | 4h news cache + 4h movers cache + cron-pre-compute + 5/min `/screener/run` | Effectively no live yfinance hits from public traffic |
-| Vercel function invocations | All reads served from Postgres cache; 2 crons; rate limits | Well under 100k invocations/mo Hobby cap |
-| Neon Postgres usage | Schema fits in < 50 MB; one row/user; cache rows TTL'd | Well under 0.5 GB / 100h compute Hobby cap |
-| Resend email | 1 digest/user/day max enforced server-side via `last_sent_at`; daily cron only | Easily under 100/day Resend free tier |
+| Yahoo Finance abuse | 15min–4h D1 caches + pre-computed screener + 40-ticker live cap | Minimal live Yahoo hits from public traffic |
+| Workers requests | Static assets + cached reads; 288 cron ticks/day | Well under 100k req/day free cap |
+| Workers subrequests | 35-ticker slices + 7 benchmarks + ≤1 news refresh per tick | Under the 50/invocation free cap |
+| D1 usage | ~620 metric rows + 200 result payloads + TTL'd caches | Well under 5 GB / 5M reads/day free cap |
+| Resend email | 1 digest/user/day enforced via `last_sent_at`; alerts trigger once | Easily under 100/day Resend free tier |
 | LLM tokens | None used — "why it moved" is heuristic | $0/mo |
 
 ---

@@ -32,3 +32,6 @@ coverage/
 .vscode/
 .idea/
 *.swp
+
+# Cloudflare
+.wrangler/
