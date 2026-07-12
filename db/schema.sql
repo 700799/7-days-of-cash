@@ -52,3 +52,11 @@ CREATE TABLE IF NOT EXISTS screener_results (
 CREATE INDEX IF NOT EXISTS idx_screener_results_run_rank ON screener_results (run_id, rank);
 CREATE INDEX IF NOT EXISTS idx_screener_results_ticker   ON screener_results (ticker);
 CREATE INDEX IF NOT EXISTS idx_screener_runs_run_at      ON screener_runs (run_at DESC);
+
+-- Herd/crowd dynamics layer. herd_state is a real column (used for joins
+-- and filters); everything else about the classification (score, reasons,
+-- levels, raw inputs) rides in the herd JSONB, following the agent_scores
+-- precedent so classifier changes never require a migration.
+ALTER TABLE screener_results ADD COLUMN IF NOT EXISTS herd_state TEXT;
+ALTER TABLE screener_results ADD COLUMN IF NOT EXISTS herd JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE screener_runs    ADD COLUMN IF NOT EXISTS breadth JSONB NOT NULL DEFAULT '{}'::jsonb;

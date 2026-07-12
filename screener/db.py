@@ -44,6 +44,7 @@ _CORE_COLUMNS: List[str] = [
     "best_strategy",
     "top_reasons",
     "flags",
+    "herd_state",
 ]
 
 
@@ -110,16 +111,18 @@ def _jsonable(obj: Any) -> Any:
 
 
 def _build_rows(df: pd.DataFrame, run_id: int) -> List[Tuple]:
-    """Build one tuple per result row: (run_id, rank, *core, agent_scores_dict).
+    """Build one tuple per result row: (run_id, rank, *core, agent_scores, herd).
 
-    agent_scores is a plain dict here; the caller wraps it for the driver.
+    The trailing dicts are plain here; the caller wraps them for the driver.
     """
     agent_cols = [c for c in df.columns if c.startswith("score_") or c.startswith("tier_")]
     rows: List[Tuple] = []
     for rank, (_, row) in enumerate(df.iterrows(), start=1):
         core = [_clean(row.get(col)) for col in _CORE_COLUMNS]
         agent_scores = {col: _clean(row.get(col)) for col in agent_cols}
-        rows.append((run_id, rank, *core, agent_scores))
+        h = row.get("herd")
+        herd = h if isinstance(h, dict) else {}  # also swallows NaN for a missing column
+        rows.append((run_id, rank, *core, agent_scores, herd))
     return rows
 
 
@@ -129,6 +132,7 @@ def write_run(
     regime: Dict[str, Any] | None = None,
     benchmarks: Dict[str, Any] | None = None,
     config: Dict[str, Any] | None = None,
+    breadth: Dict[str, Any] | None = None,
     universe_size: int = 0,
     elapsed_sec: float = 0.0,
     agent_names: List[str] | None = None,
@@ -153,15 +157,16 @@ def write_run(
                 cur.execute(
                     """
                     INSERT INTO screener_runs
-                        (regime, benchmarks, config, universe_size,
+                        (regime, benchmarks, config, breadth, universe_size,
                          result_count, elapsed_sec, agent_names)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
                     (
                         Json(_jsonable(regime or {})),
                         Json(_jsonable(benchmarks or {})),
                         Json(_jsonable(config or {})),
+                        Json(_jsonable(breadth or {})),
                         int(universe_size),
                         int(result_count),
                         float(elapsed_sec),
@@ -172,9 +177,11 @@ def write_run(
 
                 if result_count:
                     rows = _build_rows(df, run_id)
-                    wrapped = [(*r[:-1], Json(r[-1])) for r in rows]
-                    columns = ", ".join(["run_id", "rank", *_CORE_COLUMNS, "agent_scores"])
-                    placeholders = "(" + ", ".join(["%s"] * (len(_CORE_COLUMNS) + 3)) + ")"
+                    wrapped = [
+                        (*r[:-2], Json(_jsonable(r[-2])), Json(_jsonable(r[-1]))) for r in rows
+                    ]
+                    columns = ", ".join(["run_id", "rank", *_CORE_COLUMNS, "agent_scores", "herd"])
+                    placeholders = "(" + ", ".join(["%s"] * (len(_CORE_COLUMNS) + 4)) + ")"
                     execute_values(
                         cur,
                         f"INSERT INTO screener_results ({columns}) VALUES %s",

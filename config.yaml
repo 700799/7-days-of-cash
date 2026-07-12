@@ -32,7 +32,13 @@ fetch:
   max_workers: 4
   sleep_between_chunks: 0.5
   max_retries: 3
-  period: "35d"
+  # One year of daily bars. Anything shorter silently degrades the metrics:
+  # below ~50 rows ma_50 falls back to ma_20 (and ma_200 to ma_50, so the
+  # mean-reversion agent's ma_50 > ma_200 gate never fires), below 35 rows
+  # macd_hist is always 0.0, and below 60 rows the "52-week high" is just
+  # the window high. The OHLCV cache keys on (ticker, period), so changing
+  # this never reads stale rows from a previous period.
+  period: "1y"
 
 cache:
   cache_ttl: 3600                # seconds (1 hour)

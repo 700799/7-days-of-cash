@@ -1,4 +1,6 @@
 import { getLatestRun, getResults, type Result } from "@/lib/db";
+import { HerdBadge } from "@/components/HerdBadge";
+import { HerdLegend } from "@/components/HerdLegend";
 
 export const revalidate = 300;
 
@@ -67,11 +69,27 @@ export default async function Page() {
             {run.regime?.leadership && (
               <span className="badge">lead: {run.regime.leadership}</span>
             )}
+            {run.breadth?.pct_above_ma20 != null && (
+              <span className="badge" title="Share of the scanned universe above its 20-day moving average">
+                &gt;20MA: {run.breadth.pct_above_ma20}%
+              </span>
+            )}
+            {run.breadth?.pct_rsi_hot != null && (
+              <span className="badge" title="Share of the scanned universe with RSI above 70">
+                RSI&gt;70: {run.breadth.pct_rsi_hot}%
+              </span>
+            )}
+            {run.breadth?.new_52w_highs != null && (
+              <span className="badge" title="Scanned tickers within 2% of their 52-week high">
+                52w highs: {run.breadth.new_52w_highs}
+              </span>
+            )}
           </div>
 
           {results.length === 0 ? (
             <div className="empty">Last run found no leaders passing the filters.</div>
           ) : (
+            <>
             <table>
               <thead>
                 <tr>
@@ -84,6 +102,7 @@ export default async function Page() {
                   <th>RelVol</th>
                   <th>RSI</th>
                   <th>Score</th>
+                  <th className="l">Herd</th>
                   <th className="l">Strategy</th>
                   <th className="l">Reasons</th>
                 </tr>
@@ -100,12 +119,17 @@ export default async function Page() {
                     <td>{fmt(r.rel_vol)}</td>
                     <td>{fmt(r.rsi_14, 1)}</td>
                     <td>{fmt(r.composite_score, 1)}</td>
+                    <td className="l">
+                      <HerdBadge state={r.herd_state} prev={r.prev_herd_state} />
+                    </td>
                     <td className="l">{r.best_strategy ?? "—"}</td>
                     <td className="l reasons">{r.top_reasons || "—"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            <HerdLegend />
+            </>
           )}
         </>
       )}

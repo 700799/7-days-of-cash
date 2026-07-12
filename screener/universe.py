@@ -1,8 +1,15 @@
+import io
+import sys
 from typing import List
 
 import pandas as pd
+import requests
 
 _SP500_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+# Wikipedia 403s Python's default urllib user-agent from cloud IPs (e.g.
+# GitHub Actions runners); a descriptive UA with a contact URL is what
+# their bot policy asks for.
+_USER_AGENT = "Best7DaysMula/2.0 (+https://github.com/700799/7-days-of-cash) python-requests"
 
 _EXTENDED_TICKERS = [
     # Mid-cap growth names commonly screened
@@ -151,11 +158,20 @@ _EXTENDED_TICKERS = [
 
 def get_sp500_tickers() -> List[str]:
     try:
-        tables = pd.read_html(_SP500_URL, header=0)
+        resp = requests.get(_SP500_URL, headers={"User-Agent": _USER_AGENT}, timeout=30)
+        resp.raise_for_status()
+        tables = pd.read_html(io.StringIO(resp.text), header=0)
         df = tables[0]
         tickers = df["Symbol"].str.replace(".", "-", regex=False).tolist()
         return sorted(set(tickers))
-    except Exception:
+    except Exception as exc:
+        # Fail loudly: without the S&P 500 the "universe" quietly shrinks to
+        # the ~140 hardcoded extras and every universe-wide stat (breadth,
+        # scanned count) silently means something else.
+        sys.stderr.write(
+            f"WARNING: S&P 500 scrape failed ({type(exc).__name__}: {exc}); "
+            "universe falls back to the extended list only\n"
+        )
         return []
 
 
