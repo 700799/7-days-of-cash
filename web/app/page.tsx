@@ -16,7 +16,7 @@ import { ScreenerResults } from "@/components/ScreenerResults";
 import { TickerForm } from "@/components/TickerForm";
 import { TickerPills } from "@/components/TickerPills";
 import { TrendingNews } from "@/components/TrendingNews";
-import { runScreener, screenerExportUrl, type ScreenerPayload } from "@/lib/api";
+import { ApiError, runScreener, screenerExportUrl, type ScreenerPayload } from "@/lib/api";
 import { useCachedScreener, useDefaults, useTickers } from "@/lib/hooks";
 
 export default function HomePage() {
@@ -65,7 +65,17 @@ export default function HomePage() {
       );
       setLivePayload(res);
     } catch (err) {
-      setRunError(err instanceof Error ? err.message : "screener failed");
+      if (err instanceof ApiError) {
+        if (err.status === 413) {
+          setRunError("Too many tickers — the live screener accepts up to 40.");
+        } else if (err.status === 429) {
+          setRunError("Slow down — rate limit hit. Try again in a minute.");
+        } else {
+          setRunError(err.message);
+        }
+      } else {
+        setRunError("API unreachable — check your connection and try again.");
+      }
     } finally {
       setRunning(false);
     }
@@ -117,6 +127,11 @@ export default function HomePage() {
             signedIn={signedIn}
             defaults={defaults}
           />
+          {signedIn && tickers.length === 0 && (
+            <p className="text-b7-green-muted text-xs">
+              {`> Watchlist empty — add a ticker above, or [ RUN ON WATCHLIST ] uses the defaults.`}
+            </p>
+          )}
         </section>
 
         {/* Screener controls row */}

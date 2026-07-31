@@ -31,10 +31,24 @@ export async function csrfOriginCheck(c: Context<AppContext>, next: Next): Promi
   await next();
 }
 
-/** Body size cap — reject oversized payloads before parsing (64 KB). */
+/** Body size cap — reject oversized payloads before route parsing (64 KB).
+ * Checks Content-Length when present; falls back to buffering the body for
+ * chunked requests (Hono caches the read, so route handlers still get it). */
+const MAX_BODY_BYTES = 64 * 1024;
+
 export async function bodySizeLimit(c: Context<AppContext>, next: Next): Promise<Response | void> {
-  const len = Number(c.req.header("Content-Length") ?? 0);
-  if (len > 64 * 1024) return c.json({ detail: "Request body too large" }, 413);
+  const method = c.req.method;
+  if (method === "POST" || method === "PATCH" || method === "PUT") {
+    const len = Number(c.req.header("Content-Length") ?? NaN);
+    if (Number.isFinite(len)) {
+      if (len > MAX_BODY_BYTES) return c.json({ detail: "Request body too large" }, 413);
+    } else if (c.req.raw.body) {
+      const buf = await c.req.arrayBuffer();
+      if (buf.byteLength > MAX_BODY_BYTES) {
+        return c.json({ detail: "Request body too large" }, 413);
+      }
+    }
+  }
   await next();
 }
 
